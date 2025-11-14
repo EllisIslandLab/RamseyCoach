@@ -18,6 +18,7 @@ function getBase() {
 // Table names
 const TABLES = {
   CONSULTATIONS: process.env.AIRTABLE_CONSULTATIONS_TABLE || 'Consultations',
+  CONTACTS: process.env.AIRTABLE_CONTACTS_TABLE || 'Contacts',
   TESTIMONIALS: process.env.AIRTABLE_TESTIMONIALS_TABLE || 'Testimonials',
   AVAILABILITY: process.env.AIRTABLE_AVAILABILITY_TABLE || 'Availability',
 };
@@ -62,11 +63,11 @@ export interface TimeSlot {
 /**
  * Fetch testimonials from Airtable
  * @param limit - Maximum number of testimonials to fetch
- * @param offset - Number of records to skip (for pagination)
+ * @param _offset - Number of records to skip (for pagination) - not currently implemented
  */
 export async function getTestimonials(
   limit: number = 10,
-  offset: number = 0
+  _offset: number = 0
 ): Promise<Testimonial[]> {
   try {
     const records = await getBase()(TABLES.TESTIMONIALS)
@@ -175,6 +176,52 @@ export async function createConsultation(
   } catch (error) {
     console.error('Error creating consultation:', error);
     throw new Error('Failed to create consultation');
+  }
+}
+
+export interface ContactFormData {
+  Name: string;
+  Email: string;
+  Phone?: string;
+  Subject?: string;
+  Message?: string;
+}
+
+/**
+ * Create a contact form submission (saves to Contacts table)
+ * @param formData - Contact form data with Name, Email, Phone, Subject, Message
+ * @returns Created record
+ */
+export async function createContactSubmission(
+  formData: ContactFormData
+): Promise<{ id: string; success: boolean }> {
+  try {
+    const fields: Record<string, string> = {
+      Name: formData.Name,
+      Email: formData.Email,
+    };
+
+    // Add optional fields only if they have values
+    if (formData.Phone) {
+      fields.Phone = formData.Phone;
+    }
+    if (formData.Subject) {
+      fields.Subject = formData.Subject;
+    }
+    if (formData.Message) {
+      fields.Message = formData.Message;
+    }
+
+    const record = await getBase()(TABLES.CONTACTS).create([
+      {
+        fields,
+      },
+    ]);
+
+    return { id: record[0].id, success: true };
+  } catch (error) {
+    console.error('Error creating contact submission:', error);
+    throw new Error('Failed to create contact submission');
   }
 }
 

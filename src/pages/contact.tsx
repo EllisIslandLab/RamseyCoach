@@ -10,9 +10,54 @@ const BookingModal = dynamic(() => import('@/components/BookingModal'), { ssr: f
 
 export default function Contact() {
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitMessage, setSubmitMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const openBookingModal = () => setIsBookingModalOpen(true);
   const closeBookingModal = () => setIsBookingModalOpen(false);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setSubmitMessage(null);
+
+    const formData = new FormData(e.currentTarget);
+    const firstName = formData.get('firstName') as string;
+    const lastName = formData.get('lastName') as string;
+    const name = `${firstName} ${lastName}`.trim();
+    const email = formData.get('email') as string;
+    const phone = formData.get('phone') as string;
+    const subject = formData.get('subject') as string;
+    const message = formData.get('message') as string;
+
+    try {
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          Name: name,
+          Email: email,
+          Phone: phone || undefined,
+          Subject: subject || undefined,
+          Message: message || undefined,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to submit form');
+      }
+
+      setSubmitMessage({ type: 'success', text: 'Message sent successfully! We\'ll get back to you soon.' });
+      (e.target as HTMLFormElement).reset();
+    } catch (error) {
+      console.error('Error submitting form:', error);
+      setSubmitMessage({ type: 'error', text: 'Failed to send message. Please try again.' });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
   return (
     <>
       <Head>
@@ -175,7 +220,7 @@ export default function Contact() {
               <div className="bg-white rounded-lg shadow-lg p-8">
                 <h2 className="text-2xl font-bold text-primary-700 mb-6">Send Us a Message</h2>
 
-                <form className="space-y-4">
+                <form className="space-y-4" onSubmit={handleSubmit}>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label htmlFor="firstName" className="block text-sm font-medium text-secondary-700 mb-1">
@@ -235,13 +280,12 @@ export default function Contact() {
 
                   <div>
                     <label htmlFor="subject" className="block text-sm font-medium text-secondary-700 mb-1">
-                      Subject *
+                      Subject
                     </label>
                     <input
                       type="text"
                       id="subject"
                       name="subject"
-                      required
                       className="input"
                       placeholder="How can we help you?"
                     />
@@ -249,20 +293,25 @@ export default function Contact() {
 
                   <div>
                     <label htmlFor="message" className="block text-sm font-medium text-secondary-700 mb-1">
-                      Message *
+                      Message
                     </label>
                     <textarea
                       id="message"
                       name="message"
-                      required
                       rows={5}
                       className="input resize-none"
                       placeholder="Tell us about your financial goals..."
                     />
                   </div>
 
-                  <button type="submit" className="btn-primary w-full">
-                    Send Message
+                  {submitMessage && (
+                    <div className={`p-4 rounded-lg ${submitMessage.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                      {submitMessage.text}
+                    </div>
+                  )}
+
+                  <button type="submit" className="btn-primary w-full" disabled={isSubmitting}>
+                    {isSubmitting ? 'Sending...' : 'Send Message'}
                   </button>
 
                   <p className="text-xs text-secondary-500 text-center">
