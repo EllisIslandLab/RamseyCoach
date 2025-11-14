@@ -1,8 +1,18 @@
+'use client';
+
+import { useState } from 'react';
 import Head from 'next/head';
+import dynamic from 'next/dynamic';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 
+const BookingModal = dynamic(() => import('@/components/BookingModal'), { ssr: false });
+
 export default function Contact() {
+  const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+
+  const openBookingModal = () => setIsBookingModalOpen(true);
+  const closeBookingModal = () => setIsBookingModalOpen(false);
   return (
     <>
       <Head>
@@ -155,9 +165,9 @@ export default function Contact() {
                     Schedule your free consultation today and take the first step toward financial
                     peace.
                   </p>
-                  <a href="/#booking" className="btn-accent inline-block">
+                  <button onClick={openBookingModal} className="btn-accent">
                     Book Free Consultation
-                  </a>
+                  </button>
                 </div>
               </div>
 
@@ -266,6 +276,9 @@ export default function Contact() {
 
         <Footer />
       </div>
+
+      {/* Booking Modal */}
+      <BookingModal isOpen={isBookingModalOpen} onClose={closeBookingModal} />
     </>
   );
 }
