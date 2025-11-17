@@ -1,17 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { getTestimonials, Testimonial } from '@/lib/airtable';
 
 export default function Testimonials() {
   // Hardcoded first testimonial
-  const hardcodedTestimonial: Testimonial = {
+  const hardcodedTestimonial: Testimonial = useMemo(() => ({
     id: 'hardcoded-1',
     firstName: 'Sarah',
     lastName: 'Johnson',
     note: 'Working with this coach completely transformed our financial life! We paid off $45,000 in debt in just 18 months and now have a fully funded emergency fund. The guidance and accountability were exactly what we needed to stay on track with the Baby Steps.',
     createdAt: new Date().toISOString(),
-  };
+  }), []);
 
   const [testimonials, setTestimonials] = useState<Testimonial[]>([hardcodedTestimonial]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -21,7 +21,7 @@ export default function Testimonials() {
   const [error, setError] = useState<string | null>(null);
 
   // Lazy load testimonials from Airtable when user navigates past the first one
-  const loadTestimonialsFromAirtable = async () => {
+  const loadTestimonialsFromAirtable = useCallback(async () => {
     if (hasLoadedFromAirtable || isLoading) return;
 
     setIsLoading(true);
@@ -42,10 +42,10 @@ export default function Testimonials() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [hasLoadedFromAirtable, isLoading, hardcodedTestimonial]);
 
   // Navigate to previous testimonial
-  const goToPrevious = async () => {
+  const goToPrevious = useCallback(async () => {
     if (isTransitioning) return;
 
     setIsTransitioning(true);
@@ -64,10 +64,10 @@ export default function Testimonials() {
     setTimeout(() => {
       setIsTransitioning(false);
     }, 300);
-  };
+  }, [isTransitioning, currentIndex, testimonials.length, hasLoadedFromAirtable, loadTestimonialsFromAirtable]);
 
   // Navigate to next testimonial
-  const goToNext = async () => {
+  const goToNext = useCallback(async () => {
     if (isTransitioning) return;
 
     setIsTransitioning(true);
@@ -85,7 +85,7 @@ export default function Testimonials() {
     setTimeout(() => {
       setIsTransitioning(false);
     }, 300);
-  };
+  }, [isTransitioning, currentIndex, testimonials.length, hasLoadedFromAirtable, loadTestimonialsFromAirtable]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -99,7 +99,7 @@ export default function Testimonials() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentIndex, isTransitioning, hasLoadedFromAirtable]);
+  }, [goToPrevious, goToNext]);
 
   const currentTestimonial = testimonials[currentIndex];
 
