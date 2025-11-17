@@ -67,6 +67,29 @@ export default function Contact() {
           content="Get in touch with our certified financial coaching team. We're here to help you achieve financial peace."
         />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+        {/* Canonical URL */}
+        <link rel="canonical" href="https://ramseycoach.com/contact" />
+
+        {/* Open Graph / Facebook */}
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://ramseycoach.com/contact" />
+        <meta property="og:title" content="Contact Us | Ramsey Preferred Coach" />
+        <meta
+          property="og:description"
+          content="Get in touch with our certified financial coaching team. We're here to help you achieve financial peace."
+        />
+        <meta property="og:image" content="https://ramseycoach.com/images/og-image.jpg" />
+
+        {/* Twitter */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:url" content="https://ramseycoach.com/contact" />
+        <meta name="twitter:title" content="Contact Us | Ramsey Preferred Coach" />
+        <meta
+          name="twitter:description"
+          content="Get in touch with our certified financial coaching team. We're here to help you achieve financial peace."
+        />
+        <meta name="twitter:image" content="https://ramseycoach.com/images/og-image.jpg" />
       </Head>
 
       <div className="min-h-screen flex flex-col">

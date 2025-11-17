@@ -9,7 +9,7 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 lg:gap-12">
           {/* Business Location */}
           <div>
-            <h3 className="text-accent-400 font-bold text-lg mb-4">Location</h3>
+            <h2 className="text-accent-400 font-bold text-lg mb-4">Location</h2>
             <div className="space-y-2">
               <p className="text-secondary-300">[Your Business Name]</p>
               <p className="text-secondary-300">[Street Address]</p>
@@ -19,7 +19,7 @@ export default function Footer() {
 
           {/* Contact Information */}
           <div>
-            <h3 className="text-accent-400 font-bold text-lg mb-4">Contact</h3>
+            <h2 className="text-accent-400 font-bold text-lg mb-4">Contact</h2>
             <div className="space-y-3">
               <div className="flex items-center space-x-3">
                 <svg
@@ -86,7 +86,7 @@ export default function Footer() {
 
           {/* Legal Links & Social */}
           <div>
-            <h3 className="text-accent-400 font-bold text-lg mb-4">Resources</h3>
+            <h2 className="text-accent-400 font-bold text-lg mb-4">Resources</h2>
             <nav className="space-y-3">
               <Link
                 href="/contact"
