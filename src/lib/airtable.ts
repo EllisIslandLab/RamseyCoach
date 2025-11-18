@@ -37,9 +37,9 @@ export interface Consultation {
   lastName: string;
   email: string;
   bookingType: 'Free Consultation' | 'Paid Consultation';
-  dateBooked: string; // YYYY-MM-DD format
-  timeSlotStart: string; // HH:MM format in EST
-  timeSlotEnd: string; // HH:MM format in EST
+  dateBooked: string; // YYYY-MM-DD format (used internally, not saved to Airtable)
+  timeSlotStart: string; // HH:MM format in EST (used internally, not saved to Airtable)
+  timeSlotEnd: string; // HH:MM format in EST (used internally, not saved to Airtable)
   userTimezone?: string;
   userLocalTime?: string;
 }
@@ -100,25 +100,33 @@ export async function getAvailableSlots(date: string): Promise<TimeSlot[]> {
       });
     }
 
-    // Fetch existing bookings for this date
+    // Convert date from YYYY-MM-DD to MM/DD/YYYY for comparison with Date_and_Time field
+    const [year, month, day] = date.split('-');
+    const formattedDate = `${month}/${day}/${year}`;
+
+    // Fetch all bookings from the Free_Consultations table
     const records = await getBase()(TABLES.CONSULTATIONS)
       .select({
-        filterByFormula: `{dateBooked} = '${date}'`,
+        fields: ['Date_and_Time'],
       })
       .all();
 
-    // Get booked time slots
-    const bookedSlots = records.map((record) => ({
-      start: record.get('timeSlotStart') as string,
-      end: record.get('timeSlotEnd') as string,
-    }));
+    // Parse Date_and_Time field and find bookings for this date
+    const bookedTimes = new Set<string>();
+    records.forEach((record) => {
+      const dateAndTime = record.get('Date_and_Time') as string;
+      if (dateAndTime && dateAndTime.startsWith(formattedDate)) {
+        // Extract time from "MM/DD/YYYY HH:MM" format
+        const timePart = dateAndTime.split(' ')[1]; // Gets "HH:MM"
+        if (timePart) {
+          bookedTimes.add(timePart);
+        }
+      }
+    });
 
     // Mark slots as unavailable if they're booked
     allSlots.forEach((slot) => {
-      const isBooked = bookedSlots.some(
-        (booked) => booked.start === slot.start
-      );
-      if (isBooked) {
+      if (bookedTimes.has(slot.start)) {
         slot.available = false;
       }
     });
@@ -146,20 +154,11 @@ export async function createConsultation(
     // Combine date and time in the format "MM/DD/YYYY HH:MM"
     const dateAndTime = `${formattedDate} ${consultation.timeSlotStart}`;
 
-    // Create the consultation record
+    // Create the consultation record with only Date_and_Time field
     const record = await getBase()(TABLES.CONSULTATIONS).create([
       {
         fields: {
-          firstName: consultation.firstName,
-          lastName: consultation.lastName,
-          email: consultation.email,
-          bookingType: consultation.bookingType,
-          dateBooked: consultation.dateBooked,
-          timeSlotStart: consultation.timeSlotStart,
-          timeSlotEnd: consultation.timeSlotEnd,
           Date_and_Time: dateAndTime,
-          ...(consultation.userTimezone && { userTimezone: consultation.userTimezone }),
-          ...(consultation.userLocalTime && { userLocalTime: consultation.userLocalTime }),
         },
       },
     ]);
