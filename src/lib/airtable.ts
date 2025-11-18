@@ -17,10 +17,9 @@ function getBase() {
 
 // Table names
 const TABLES = {
-  CONSULTATIONS: process.env.AIRTABLE_CONSULTATIONS_TABLE || 'Consultations',
+  CONSULTATIONS: process.env.AIRTABLE_CONSULTATIONS_TABLE || 'Free_Consultations',
   CONTACTS: process.env.AIRTABLE_CONTACTS_TABLE || 'Contacts',
   TESTIMONIALS: process.env.AIRTABLE_TESTIMONIALS_TABLE || 'Testimonials',
-  AVAILABILITY: process.env.AIRTABLE_AVAILABILITY_TABLE || 'Availability',
 };
 
 // Type definitions
@@ -41,17 +40,8 @@ export interface Consultation {
   dateBooked: string; // YYYY-MM-DD format
   timeSlotStart: string; // HH:MM format in EST
   timeSlotEnd: string; // HH:MM format in EST
-  userTimezone: string;
-  userLocalTime: string;
-}
-
-export interface AvailabilitySlot {
-  id: string;
-  date: string; // YYYY-MM-DD format
-  timeSlot: string; // HH:MM format in EST
-  bookingType: 'Free' | 'Paid';
-  isBooked: boolean;
-  consultationId?: string;
+  userTimezone?: string;
+  userLocalTime?: string;
 }
 
 export interface TimeSlot {
@@ -98,38 +88,42 @@ export async function getTestimonials(
  */
 export async function getAvailableSlots(date: string): Promise<TimeSlot[]> {
   try {
-    // Fetch all slots for the specified date
-    const records = await getBase()(TABLES.AVAILABILITY)
-      .select({
-        filterByFormula: `AND({date} = '${date}', {isBooked} = FALSE())`,
-        sort: [{ field: 'timeSlot', direction: 'asc' }],
-      })
-      .all();
-
-    const slots = records.map((record) => ({
-      id: record.id,
-      date: record.get('date') as string,
-      timeSlot: record.get('timeSlot') as string,
-      bookingType: record.get('bookingType') as 'Free' | 'Paid',
-      isBooked: record.get('isBooked') as boolean,
-    }));
-
-    // Group slots into time blocks (30-min for free, 1-hour for paid)
-    const timeSlots: TimeSlot[] = [];
-
-    for (let i = 0; i < slots.length; i++) {
-      const currentSlot = slots[i];
-
-      // Free consultation: 30-min (1 slot)
-      const endTime = addMinutesToTime(currentSlot.timeSlot, 30);
-      timeSlots.push({
-        start: currentSlot.timeSlot,
+    // Generate all possible hourly slots from 9 AM - 5 PM
+    const allSlots: TimeSlot[] = [];
+    for (let hour = 9; hour < 17; hour++) {
+      const startTime = `${hour.toString().padStart(2, '0')}:00`;
+      const endTime = `${(hour + 1).toString().padStart(2, '0')}:00`;
+      allSlots.push({
+        start: startTime,
         end: endTime,
-        available: !currentSlot.isBooked,
+        available: true,
       });
     }
 
-    return timeSlots;
+    // Fetch existing bookings for this date
+    const records = await getBase()(TABLES.CONSULTATIONS)
+      .select({
+        filterByFormula: `{dateBooked} = '${date}'`,
+      })
+      .all();
+
+    // Get booked time slots
+    const bookedSlots = records.map((record) => ({
+      start: record.get('timeSlotStart') as string,
+      end: record.get('timeSlotEnd') as string,
+    }));
+
+    // Mark slots as unavailable if they're booked
+    allSlots.forEach((slot) => {
+      const isBooked = bookedSlots.some(
+        (booked) => booked.start === slot.start
+      );
+      if (isBooked) {
+        slot.available = false;
+      }
+    });
+
+    return allSlots;
   } catch (error) {
     console.error('Error fetching available slots:', error);
     throw new Error('Failed to fetch available slots');
@@ -145,6 +139,13 @@ export async function createConsultation(
   consultation: Consultation
 ): Promise<{ id: string; success: boolean }> {
   try {
+    // Format date as MM/DD/YYYY
+    const [year, month, day] = consultation.dateBooked.split('-');
+    const formattedDate = `${month}/${day}/${year}`;
+
+    // Combine date and time in the format "MM/DD/YYYY HH:MM"
+    const dateAndTime = `${formattedDate} ${consultation.timeSlotStart}`;
+
     // Create the consultation record
     const record = await getBase()(TABLES.CONSULTATIONS).create([
       {
@@ -156,21 +157,14 @@ export async function createConsultation(
           dateBooked: consultation.dateBooked,
           timeSlotStart: consultation.timeSlotStart,
           timeSlotEnd: consultation.timeSlotEnd,
-          userTimezone: consultation.userTimezone,
-          userLocalTime: consultation.userLocalTime,
+          Date_and_Time: dateAndTime,
+          ...(consultation.userTimezone && { userTimezone: consultation.userTimezone }),
+          ...(consultation.userLocalTime && { userLocalTime: consultation.userLocalTime }),
         },
       },
     ]);
 
     const consultationId = record[0].id;
-
-    // Mark the time slots as booked in the Availability table
-    await markSlotsAsBooked(
-      consultation.dateBooked,
-      consultation.timeSlotStart,
-      consultation.timeSlotEnd,
-      consultationId
-    );
 
     return { id: consultationId, success: true };
   } catch (error) {
@@ -225,65 +219,6 @@ export async function createContactSubmission(
   }
 }
 
-/**
- * Mark time slots as booked in the Availability table
- * @param date - Date of the booking
- * @param startTime - Start time of the booking
- * @param endTime - End time of the booking
- * @param consultationId - ID of the consultation
- */
-async function markSlotsAsBooked(
-  date: string,
-  startTime: string,
-  endTime: string,
-  consultationId: string
-): Promise<void> {
-  try {
-    // Find all slots that fall within the booking time range
-    const records = await getBase()(TABLES.AVAILABILITY)
-      .select({
-        filterByFormula: `AND(
-          {date} = '${date}',
-          {timeSlot} >= '${startTime}',
-          {timeSlot} < '${endTime}'
-        )`,
-      })
-      .all();
-
-    // Update each slot to mark it as booked
-    const updates = records.map((record) => ({
-      id: record.id,
-      fields: {
-        isBooked: true,
-        consultationId: consultationId,
-      },
-    }));
-
-    if (updates.length > 0) {
-      await getBase()(TABLES.AVAILABILITY).update(updates);
-    }
-  } catch (error) {
-    console.error('Error marking slots as booked:', error);
-    throw new Error('Failed to mark slots as booked');
-  }
-}
-
-/**
- * Utility function to add minutes to a time string
- * @param time - Time in HH:MM format
- * @param minutes - Minutes to add
- * @returns New time in HH:MM format
- */
-function addMinutesToTime(time: string, minutes: number): string {
-  const [hours, mins] = time.split(':').map(Number);
-  const date = new Date();
-  date.setHours(hours, mins + minutes);
-
-  const newHours = date.getHours().toString().padStart(2, '0');
-  const newMins = date.getMinutes().toString().padStart(2, '0');
-
-  return `${newHours}:${newMins}`;
-}
 
 /**
  * Check if a specific date is a weekday (Mon-Fri)

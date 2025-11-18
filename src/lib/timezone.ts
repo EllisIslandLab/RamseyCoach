@@ -135,32 +135,30 @@ export function formatTimeForDisplay(time: string): string {
 }
 
 /**
- * Generate business hours time slots (8am - 5pm EST)
- * @returns Array of time slots in HH:MM format (30-minute intervals)
+ * Generate business hours time slots (9am - 5pm EST)
+ * @returns Array of time slots in HH:MM format (hourly intervals)
  */
 export function generateBusinessHours(): string[] {
   const slots: string[] = [];
-  const startHour = 8; // 8 AM
+  const startHour = 9; // 9 AM
   const endHour = 17; // 5 PM
 
   for (let hour = startHour; hour < endHour; hour++) {
-    for (let minute = 0; minute < 60; minute += 30) {
-      const timeSlot = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-      slots.push(timeSlot);
-    }
+    const timeSlot = `${hour.toString().padStart(2, '0')}:00`;
+    slots.push(timeSlot);
   }
 
   return slots;
 }
 
 /**
- * Check if a time slot is within business hours (8am - 5pm)
+ * Check if a time slot is within business hours (9am - 5pm)
  * @param time - Time in HH:MM format
  * @returns True if within business hours
  */
 export function isBusinessHours(time: string): boolean {
   const [hours] = time.split(':').map(Number);
-  return hours >= 8 && hours < 17;
+  return hours >= 9 && hours < 17;
 }
 
 /**

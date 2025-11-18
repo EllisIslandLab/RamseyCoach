@@ -38,7 +38,7 @@ export default function Booking() {
 
             {/* Subheading */}
             <p className="text-primary-100 text-xl mb-8 max-w-2xl mx-auto">
-              Schedule your free 30-minute consultation today and take the first step toward
+              Schedule your free 1-hour consultation today and take the first step toward
               financial peace. Let's work together to create a personalized plan that fits your
               unique situation and goals.
             </p>
@@ -122,7 +122,7 @@ export default function Booking() {
 
             {/* Trust Message */}
             <p className="text-primary-200 text-sm mt-6">
-              Available Monday - Friday, 8:00 AM - 5:00 PM EST
+              Available Monday - Friday, 9:00 AM - 5:00 PM EST
             </p>
           </div>
         </div>

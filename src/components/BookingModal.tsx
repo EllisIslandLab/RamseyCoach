@@ -384,7 +384,7 @@ export default function BookingModal({ isOpen, onClose }: BookingModalProps) {
             </div>
 
             <p className="text-center text-secondary-600 mt-6">
-              Available Monday - Friday, 8:00 AM - 5:00 PM EST
+              Available Monday - Friday, 9:00 AM - 5:00 PM EST
             </p>
           </div>
         )}
@@ -535,7 +535,7 @@ export default function BookingModal({ isOpen, onClose }: BookingModalProps) {
                   {userTimezone && `(${getTimezoneFriendlyName(userTimezone)})`}
                 </p>
                 <p>
-                  <span className="font-medium">Type:</span> Free 30-Minute Consultation
+                  <span className="font-medium">Type:</span> Free 1-Hour Consultation
                 </p>
               </div>
             </div>
