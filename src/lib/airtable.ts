@@ -17,7 +17,7 @@ function getBase() {
 
 // Table names
 const TABLES = {
-  CONSULTATIONS: process.env.AIRTABLE_CONSULTATIONS_TABLE || 'Free_Consultations',
+  AVAILABILITY: process.env.AIRTABLE_AVAILABILITY_TABLE || 'Availability',
   CONTACTS: process.env.AIRTABLE_CONTACTS_TABLE || 'Contacts',
   TESTIMONIALS: process.env.AIRTABLE_TESTIMONIALS_TABLE || 'Testimonials',
 };
@@ -104,8 +104,8 @@ export async function getAvailableSlots(date: string): Promise<TimeSlot[]> {
     const [year, month, day] = date.split('-');
     const formattedDate = `${month}/${day}/${year}`;
 
-    // Fetch all bookings from the Free_Consultations table
-    const records = await getBase()(TABLES.CONSULTATIONS)
+    // Fetch all bookings from the Availability table
+    const records = await getBase()(TABLES.AVAILABILITY)
       .select({
         fields: ['Date_and_Time'],
       })
@@ -154,8 +154,8 @@ export async function createConsultation(
     // Combine date and time in the format "MM/DD/YYYY HH:MM"
     const dateAndTime = `${formattedDate} ${consultation.timeSlotStart}`;
 
-    // Create the consultation record with only Date_and_Time field
-    const record = await getBase()(TABLES.CONSULTATIONS).create([
+    // Create the booking record in Availability table with Date_and_Time field
+    const record = await getBase()(TABLES.AVAILABILITY).create([
       {
         fields: {
           Date_and_Time: dateAndTime,
