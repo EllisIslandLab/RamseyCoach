@@ -1,1 +1,126 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "version": 1,
+  "description": "Claude Code settings for RamseyCoach Next.js project with Airtable integration",
 
+  "environment": {
+    "variables": {
+      "excludePatterns": [
+        ".env",
+        ".env.local",
+        ".env.*.local",
+        "*.pem",
+        ".vercel/**"
+      ]
+    }
+  },
+
+  "files": {
+    "restrictedPaths": [
+      "node_modules/**",
+      ".next/**",
+      "out/**",
+      ".vercel/**",
+      "coverage/**"
+    ],
+    "excludePatterns": [
+      "**/node_modules/**",
+      "**/.next/**",
+      "**/out/**",
+      "**/coverage/**",
+      "**/.vercel/**",
+      "**/*.pem"
+    ]
+  },
+
+  "build": {
+    "command": "npm run build",
+    "devCommand": "npm run dev",
+    "outputDirectory": ".next",
+    "excludeFromOutput": [
+      "node_modules",
+      ".env*",
+      "*.pem"
+    ]
+  },
+
+  "development": {
+    "scripts": {
+      "dev": "npm run dev",
+      "build": "npm run build",
+      "start": "npm start",
+      "lint": "npm run lint"
+    },
+    "nodeVersion": ">=18.x",
+    "packageManager": "npm"
+  },
+
+  "security": {
+    "environmentVariables": {
+      "allowedVariables": [
+        "NEXT_PUBLIC_AIRTABLE_BASE_ID"
+      ],
+      "restrictedVariables": [
+        "AIRTABLE_API_TOKEN",
+        "AIRTABLE_API_KEY"
+      ],
+      "neverLog": [
+        "AIRTABLE_API_TOKEN",
+        "AIRTABLE_API_KEY",
+        "API_KEY",
+        "SECRET",
+        "PASSWORD",
+        "TOKEN"
+      ]
+    },
+    "sensitivePatterns": [
+      "**/airtable.ts",
+      "**/api/**",
+      ".env*",
+      "**/*.pem"
+    ],
+    "excludeFromAnalysis": [
+      "package-lock.json",
+      ".next/**",
+      "node_modules/**"
+    ]
+  },
+
+  "projectStructure": {
+    "srcDirectory": "src",
+    "publicDirectory": "public",
+    "components": "src/components",
+    "pages": "src/pages",
+    "utilities": "src/lib",
+    "configFiles": [
+      "next.config.js",
+      "tsconfig.json",
+      "tailwind.config.ts",
+      "postcss.config.js"
+    ]
+  },
+
+  "airtable": {
+    "tables": [
+      "Availability",
+      "Contacts",
+      "Testimonials"
+    ],
+    "requiredTables": [
+      "Availability",
+      "Contacts"
+    ],
+    "note": "All table operations require AIRTABLE_API_TOKEN"
+  },
+
+  "apiRoutes": {
+    "public": [
+      "GET /api/availability",
+      "GET /api/testimonials"
+    ],
+    "protected": [
+      "POST /api/bookings",
+      "POST /api/contact"
+    ]
+  }
+}
