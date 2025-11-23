@@ -1,12 +1,18 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
-  createConsultation,
-  getAvailableSlots,
   isWeekday,
   isPastDate,
   TimeSlot,
+  Consultation,
+  ClientFormData,
+  RelationshipStatus,
+  AgeRange,
+  EmploymentStatus,
+  ReasonForVisit,
+  DebtType,
+  PreferredContactMethod,
 } from '@/lib/airtable';
 import {
   detectUserTimezone,
@@ -44,10 +50,26 @@ export default function BookingModal({ isOpen, onClose }: BookingModalProps) {
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<TimeSlot | null>(null);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
 
-  // Contact form state
+  // Fully booked dates state (for calendar indicators)
+  const [fullyBookedDates, setFullyBookedDates] = useState<Set<string>>(new Set());
+  const [isLoadingBookedDates, setIsLoadingBookedDates] = useState(false);
+  const [cachedMonths, setCachedMonths] = useState<Map<string, string[]>>(new Map());
+
+  // Client form state
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [relationship, setRelationship] = useState<RelationshipStatus | ''>('');
+  const [householdSize, setHouseholdSize] = useState<number | ''>('');
+  const [ageRange, setAgeRange] = useState<AgeRange | ''>('');
+  const [employmentStatus, setEmploymentStatus] = useState<EmploymentStatus | ''>('');
+  const [reasonForVisit, setReasonForVisit] = useState<ReasonForVisit | ''>('');
+  const [primaryFinancialConcern, setPrimaryFinancialConcern] = useState('');
+  const [currentDebtType, setCurrentDebtType] = useState<DebtType[]>([]);
+  const [preferredContactMethod, setPreferredContactMethod] = useState<PreferredContactMethod | ''>('');
+  const [bestTimeToContact, setBestTimeToContact] = useState('');
+  const [consent, setConsent] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -58,11 +80,61 @@ export default function BookingModal({ isOpen, onClose }: BookingModalProps) {
     setUserTimezone(detected || 'EST');
   }, []);
 
-  // Handle modal open/close animations
+  // Fetch fully booked dates for a month (with caching and retry)
+  const loadBookedDatesForMonth = useCallback(async (date: Date, retryCount = 0) => {
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1; // 0-indexed to 1-indexed
+    const cacheKey = `${year}-${month}`;
+
+    // Check cache first
+    if (cachedMonths.has(cacheKey)) {
+      const cached = cachedMonths.get(cacheKey)!;
+      setFullyBookedDates(new Set(cached));
+      return;
+    }
+
+    setIsLoadingBookedDates(true);
+
+    try {
+      const response = await fetch(`/api/booked-dates?year=${year}&month=${month}`);
+      if (!response.ok) {
+        // Retry up to 2 times on failure
+        if (retryCount < 2) {
+          setIsLoadingBookedDates(false);
+          setTimeout(() => loadBookedDatesForMonth(date, retryCount + 1), 1000);
+          return;
+        }
+        // After retries, silently fail - calendar will still work, just won't show fully booked dates
+        console.warn('Failed to fetch booked dates after retries');
+        setFullyBookedDates(new Set());
+        return;
+      }
+      const bookedDates: string[] = await response.json();
+
+      // Update cache
+      setCachedMonths(prev => new Map(prev).set(cacheKey, bookedDates));
+      setFullyBookedDates(new Set(bookedDates));
+    } catch (error) {
+      // Retry up to 2 times on error
+      if (retryCount < 2) {
+        setIsLoadingBookedDates(false);
+        setTimeout(() => loadBookedDatesForMonth(date, retryCount + 1), 1000);
+        return;
+      }
+      console.warn('Error loading booked dates:', error);
+      setFullyBookedDates(new Set());
+    } finally {
+      setIsLoadingBookedDates(false);
+    }
+  }, [cachedMonths]);
+
+  // Handle modal open/close animations and load booked dates
   useEffect(() => {
     if (isOpen) {
       setIsAnimating(true);
       document.body.style.overflow = 'hidden';
+      // Load booked dates for current month when modal opens
+      loadBookedDatesForMonth(currentMonth);
     } else {
       const timer = setTimeout(() => {
         setIsAnimating(false);
@@ -73,6 +145,17 @@ export default function BookingModal({ isOpen, onClose }: BookingModalProps) {
         setFirstName('');
         setLastName('');
         setEmail('');
+        setPhone('');
+        setRelationship('');
+        setHouseholdSize('');
+        setAgeRange('');
+        setEmploymentStatus('');
+        setReasonForVisit('');
+        setPrimaryFinancialConcern('');
+        setCurrentDebtType([]);
+        setPreferredContactMethod('');
+        setBestTimeToContact('');
+        setConsent(false);
         setFormError(null);
       }, 300);
 
@@ -83,6 +166,7 @@ export default function BookingModal({ isOpen, onClose }: BookingModalProps) {
     return () => {
       document.body.style.overflow = 'unset';
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   // Close on escape key
@@ -99,15 +183,15 @@ export default function BookingModal({ isOpen, onClose }: BookingModalProps) {
 
   // Calendar navigation
   const goToPreviousMonth = () => {
-    setCurrentMonth(
-      new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1)
-    );
+    const newMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1);
+    setCurrentMonth(newMonth);
+    loadBookedDatesForMonth(newMonth);
   };
 
   const goToNextMonth = () => {
-    setCurrentMonth(
-      new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1)
-    );
+    const newMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1);
+    setCurrentMonth(newMonth);
+    loadBookedDatesForMonth(newMonth);
   };
 
   // Generate calendar days
@@ -137,23 +221,42 @@ export default function BookingModal({ isOpen, onClose }: BookingModalProps) {
 
   // Handle date selection
   const handleDateSelect = async (date: Date) => {
-    if (!isWeekday(date) || isPastDate(date)) return;
+    const dateStr = date.toISOString().split('T')[0];
+    if (!isWeekday(date) || isPastDate(date) || fullyBookedDates.has(dateStr)) return;
 
     setSelectedDate(date);
     setStep('timeSlots');
     await loadAvailableSlots(date);
   };
 
-  // Load available time slots for a date
-  const loadAvailableSlots = async (date: Date) => {
+  // Load available time slots for a date via API with retry
+  const loadAvailableSlots = async (date: Date, retryCount = 0) => {
     setIsLoadingSlots(true);
 
     try {
       const dateString = date.toISOString().split('T')[0];
-      const slots = await getAvailableSlots(dateString);
+      const response = await fetch(`/api/availability?date=${dateString}`);
+      if (!response.ok) {
+        // Retry up to 2 times on failure
+        if (retryCount < 2) {
+          setIsLoadingSlots(false);
+          setTimeout(() => loadAvailableSlots(date, retryCount + 1), 1000);
+          return;
+        }
+        console.warn('Failed to fetch availability after retries');
+        setAvailableSlots([]);
+        return;
+      }
+      const slots: TimeSlot[] = await response.json();
       setAvailableSlots(slots);
     } catch (error) {
-      console.error('Error loading time slots:', error);
+      // Retry up to 2 times on error
+      if (retryCount < 2) {
+        setIsLoadingSlots(false);
+        setTimeout(() => loadAvailableSlots(date, retryCount + 1), 1000);
+        return;
+      }
+      console.warn('Error loading time slots:', error);
       setAvailableSlots([]);
     } finally {
       setIsLoadingSlots(false);
@@ -181,6 +284,24 @@ export default function BookingModal({ isOpen, onClose }: BookingModalProps) {
       return;
     }
 
+    // Validate reason for visit (required)
+    if (!reasonForVisit) {
+      setFormError('Please select a reason for your visit');
+      return;
+    }
+
+    // Validate consent
+    if (!consent) {
+      setFormError('Please agree to the privacy policy to continue');
+      return;
+    }
+
+    // Validate phone number if contact method requires it
+    if ((preferredContactMethod === 'Phone' || preferredContactMethod === 'Text') && !phone.trim()) {
+      setFormError('Please provide a phone number if you want us to contact you by phone or text');
+      return;
+    }
+
     // Basic email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
@@ -196,7 +317,8 @@ export default function BookingModal({ isOpen, onClose }: BookingModalProps) {
       // Format user local time for reference
       const userLocalTime = `${formatTimeForDisplay(selectedTimeSlot.start)} - ${formatTimeForDisplay(selectedTimeSlot.end)}`;
 
-      await createConsultation({
+      // Create consultation booking
+      const consultation: Consultation = {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         email: email.trim(),
@@ -206,7 +328,49 @@ export default function BookingModal({ isOpen, onClose }: BookingModalProps) {
         timeSlotEnd: selectedTimeSlot.end,
         userTimezone: userTimezone,
         userLocalTime: userLocalTime,
+      };
+
+      const bookingResponse = await fetch('/api/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(consultation),
       });
+
+      if (!bookingResponse.ok) {
+        throw new Error('Failed to create booking');
+      }
+
+      // Get the booking record ID and datetime from the response
+      const bookingResult = await bookingResponse.json();
+
+      // Create client record with all information and link to booking record
+      const clientData: ClientFormData = {
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        email: email.trim(),
+        phone: phone.trim() || undefined,
+        relationship: relationship || undefined,
+        householdSize: householdSize || undefined,
+        ageRange: ageRange || undefined,
+        employmentStatus: employmentStatus || undefined,
+        reasonForVisit: reasonForVisit,
+        primaryFinancialConcern: primaryFinancialConcern.trim() || undefined,
+        currentDebtType: currentDebtType.length > 0 ? currentDebtType : undefined,
+        preferredContactMethod: preferredContactMethod || undefined,
+        bestTimeToContact: bestTimeToContact.trim() || undefined,
+        consent: consent,
+        bookedRecordId: bookingResult.id,
+      };
+
+      const clientResponse = await fetch('/api/clients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(clientData),
+      });
+
+      if (!clientResponse.ok) {
+        throw new Error('Failed to create client record');
+      }
 
       setStep('success');
     } catch (error) {
@@ -347,8 +511,10 @@ export default function BookingModal({ isOpen, onClose }: BookingModalProps) {
 
                 const isToday = date.getTime() === today.getTime();
                 const isSelected = selectedDate && date.getTime() === selectedDate.getTime();
-                const isDisabled = !isWeekday(date) || isPastDate(date);
                 const isWeekend = !isWeekday(date);
+                const dateStr = date.toISOString().split('T')[0];
+                const isFullyBooked = fullyBookedDates.has(dateStr);
+                const isDisabled = !isWeekday(date) || isPastDate(date) || isFullyBooked;
 
                 return (
                   <button
@@ -357,9 +523,10 @@ export default function BookingModal({ isOpen, onClose }: BookingModalProps) {
                     disabled={isDisabled}
                     className={`calendar-day ${isSelected ? 'calendar-day-selected' : ''} ${
                       isToday ? 'calendar-day-today' : ''
-                    } ${isDisabled && !isWeekend ? 'calendar-day-disabled' : ''} ${
+                    } ${isDisabled && !isWeekend && !isFullyBooked ? 'calendar-day-disabled' : ''} ${
                       isWeekend ? 'calendar-day-weekend' : ''
-                    }`}
+                    } ${isFullyBooked ? 'calendar-day-fully-booked' : ''}`}
+                    title={isFullyBooked ? 'Fully booked' : undefined}
                   >
                     {date.getDate()}
                   </button>
@@ -380,6 +547,10 @@ export default function BookingModal({ isOpen, onClose }: BookingModalProps) {
               <div className="flex items-center space-x-2">
                 <div className="w-4 h-4 bg-secondary-200 rounded opacity-50 line-through"></div>
                 <span>Weekend</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-4 h-4 bg-secondary-300 rounded opacity-60"></div>
+                <span>Fully Booked</span>
               </div>
             </div>
 
@@ -511,21 +682,22 @@ export default function BookingModal({ isOpen, onClose }: BookingModalProps) {
         {/* Contact Info Step */}
         {step === 'contactInfo' && selectedDate && selectedTimeSlot && (
           <div>
-            <h2 className="text-3xl font-bold text-primary-700 mb-6 text-center">
-              Confirm Your Booking
+            <h2 className="text-2xl font-bold text-primary-700 mb-2 text-center">
+              Just a Few Details
             </h2>
+            <p className="text-secondary-600 text-center mb-6">
+              A little personal information helps us prepare for your consultation.
+            </p>
 
             {/* Booking Summary */}
-            <div className="bg-primary-50 rounded-lg p-6 mb-6">
-              <h3 className="font-semibold text-primary-800 mb-3">Booking Summary</h3>
-              <div className="space-y-2 text-secondary-700">
+            <div className="bg-primary-50 rounded-lg p-4 mb-6">
+              <div className="flex flex-wrap gap-4 text-sm text-secondary-700">
                 <p>
                   <span className="font-medium">Date:</span>{' '}
                   {selectedDate.toLocaleDateString('en-US', {
-                    weekday: 'long',
-                    month: 'long',
+                    weekday: 'short',
+                    month: 'short',
                     day: 'numeric',
-                    year: 'numeric',
                   })}
                 </p>
                 <p>
@@ -534,59 +706,285 @@ export default function BookingModal({ isOpen, onClose }: BookingModalProps) {
                   {formatTimeForDisplay(selectedTimeSlot.end)}{' '}
                   {userTimezone && `(${getTimezoneFriendlyName(userTimezone)})`}
                 </p>
-                <p>
-                  <span className="font-medium">Type:</span> Free 1-Hour Consultation
-                </p>
               </div>
             </div>
 
-            {/* Contact Form */}
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="firstName" className="block text-sm font-medium text-secondary-700 mb-1">
-                    First Name *
-                  </label>
-                  <input
-                    type="text"
-                    id="firstName"
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    required
-                    className="input"
-                    placeholder="John"
-                  />
+            {/* Client Information Form */}
+            <form onSubmit={handleSubmit} className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+              {/* Contact Information Section */}
+              <div className="space-y-4">
+                <h3 className="font-semibold text-secondary-800 border-b pb-2">Contact Information</h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="firstName" className="block text-sm font-medium text-secondary-700 mb-1">
+                      First Name *
+                    </label>
+                    <input
+                      type="text"
+                      id="firstName"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      required
+                      className="input"
+                      placeholder="John"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="lastName" className="block text-sm font-medium text-secondary-700 mb-1">
+                      Last Name *
+                    </label>
+                    <input
+                      type="text"
+                      id="lastName"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      required
+                      className="input"
+                      placeholder="Doe"
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label htmlFor="lastName" className="block text-sm font-medium text-secondary-700 mb-1">
-                    Last Name *
-                  </label>
-                  <input
-                    type="text"
-                    id="lastName"
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    required
-                    className="input"
-                    placeholder="Doe"
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="email" className="block text-sm font-medium text-secondary-700 mb-1">
+                      Email Address *
+                    </label>
+                    <input
+                      type="email"
+                      id="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      className="input"
+                      placeholder="john.doe@example.com"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="phone" className="block text-sm font-medium text-secondary-700 mb-1">
+                      Phone Number
+                    </label>
+                    <input
+                      type="tel"
+                      id="phone"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className="input"
+                      placeholder="(555) 123-4567"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-secondary-700 mb-1">
-                  Email Address *
+              {/* Personal Context Section */}
+              <div className="space-y-4">
+                <h3 className="font-semibold text-secondary-800 border-b pb-2">Personal Context</h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="relationship" className="block text-sm font-medium text-secondary-700 mb-1">
+                      Relationship Status
+                    </label>
+                    <select
+                      id="relationship"
+                      value={relationship}
+                      onChange={(e) => setRelationship(e.target.value as RelationshipStatus | '')}
+                      className="input"
+                    >
+                      <option value="">Select...</option>
+                      <option value="single">Single</option>
+                      <option value="married">Married</option>
+                      <option value="divorced">Divorced</option>
+                      <option value="widowed">Widowed</option>
+                      <option value="in a relationship">In a relationship</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="householdSize" className="block text-sm font-medium text-secondary-700 mb-1">
+                      Household Size
+                    </label>
+                    <input
+                      type="number"
+                      id="householdSize"
+                      value={householdSize}
+                      onChange={(e) => setHouseholdSize(e.target.value ? parseInt(e.target.value) : '')}
+                      min="1"
+                      max="20"
+                      className="input"
+                      placeholder="Number of people"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="ageRange" className="block text-sm font-medium text-secondary-700 mb-1">
+                      Age Range
+                    </label>
+                    <select
+                      id="ageRange"
+                      value={ageRange}
+                      onChange={(e) => setAgeRange(e.target.value as AgeRange | '')}
+                      className="input"
+                    >
+                      <option value="">Select...</option>
+                      <option value="18-24">18-24</option>
+                      <option value="25-34">25-34</option>
+                      <option value="35-44">35-44</option>
+                      <option value="45-54">45-54</option>
+                      <option value="55-64">55-64</option>
+                      <option value="65+">65+</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="employmentStatus" className="block text-sm font-medium text-secondary-700 mb-1">
+                      Employment Status
+                    </label>
+                    <select
+                      id="employmentStatus"
+                      value={employmentStatus}
+                      onChange={(e) => setEmploymentStatus(e.target.value as EmploymentStatus | '')}
+                      className="input"
+                    >
+                      <option value="">Select...</option>
+                      <option value="Employed Full-time">Employed Full-time</option>
+                      <option value="Employed Part-time">Employed Part-time</option>
+                      <option value="Self-employed">Self-employed</option>
+                      <option value="Unemployed">Unemployed</option>
+                      <option value="Retired">Retired</option>
+                      <option value="Student">Student</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Financial Context Section */}
+              <div className="space-y-4">
+                <h3 className="font-semibold text-secondary-800 border-b pb-2">Financial Context</h3>
+
+                <div>
+                  <label htmlFor="reasonForVisit" className="block text-sm font-medium text-secondary-700 mb-1">
+                    Reason for Visit *
+                  </label>
+                  <select
+                    id="reasonForVisit"
+                    value={reasonForVisit}
+                    onChange={(e) => setReasonForVisit(e.target.value as ReasonForVisit | '')}
+                    required
+                    className="input"
+                  >
+                    <option value="">Select a reason...</option>
+                    <option value="Create/Review Budget">Create/Review Budget</option>
+                    <option value="Debt Management">Debt Management</option>
+                    <option value="General Financial Planning">General Financial Planning</option>
+                    <option value="Emergency Fund/Savings">Emergency Fund/Savings</option>
+                    <option value="Investing & Wealth Building">Investing & Wealth Building</option>
+                    <option value="Business/Self-employed">Business/Self-employed</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="primaryFinancialConcern" className="block text-sm font-medium text-secondary-700 mb-1">
+                    What&apos;s your primary financial concern?
+                  </label>
+                  <textarea
+                    id="primaryFinancialConcern"
+                    value={primaryFinancialConcern}
+                    onChange={(e) => setPrimaryFinancialConcern(e.target.value)}
+                    rows={3}
+                    className="input resize-none"
+                    placeholder="Tell us what's on your mind financially..."
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-secondary-700 mb-2">
+                    Current Debt Types (select all that apply)
+                  </label>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    {(['Credit Cards', 'Student Loans', 'Mortgage', 'Car Loan', 'Medical', 'Personal Loan', 'Other'] as DebtType[]).map((debt) => (
+                      <label key={debt} className="flex items-center space-x-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={currentDebtType.includes(debt)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setCurrentDebtType([...currentDebtType, debt]);
+                            } else {
+                              setCurrentDebtType(currentDebtType.filter(d => d !== debt));
+                            }
+                          }}
+                          className="rounded border-secondary-300 text-primary-600 focus:ring-primary-500"
+                        />
+                        <span>{debt}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Communication Preferences */}
+              <div className="space-y-4">
+                <h3 className="font-semibold text-secondary-800 border-b pb-2">Communication Preferences</h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="preferredContactMethod" className="block text-sm font-medium text-secondary-700 mb-1">
+                      Preferred Contact Method
+                    </label>
+                    <select
+                      id="preferredContactMethod"
+                      value={preferredContactMethod}
+                      onChange={(e) => setPreferredContactMethod(e.target.value as PreferredContactMethod | '')}
+                      className="input"
+                    >
+                      <option value="">Select...</option>
+                      <option value="Email">Email</option>
+                      <option value="Phone">Phone</option>
+                      <option value="Text">Text</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="bestTimeToContact" className="block text-sm font-medium text-secondary-700 mb-1">
+                      Best Time to Contact
+                    </label>
+                    <input
+                      type="text"
+                      id="bestTimeToContact"
+                      value={bestTimeToContact}
+                      onChange={(e) => setBestTimeToContact(e.target.value)}
+                      className="input"
+                      placeholder="e.g., Weekday evenings"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Consent */}
+              <div className="bg-secondary-50 rounded-lg p-4">
+                <label className="flex items-start space-x-3">
+                  <input
+                    type="checkbox"
+                    checked={consent}
+                    onChange={(e) => setConsent(e.target.checked)}
+                    required
+                    className="mt-1 rounded border-secondary-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  <span className="text-sm text-secondary-700">
+                    I agree to the{' '}
+                    <a href="/privacy-policy" target="_blank" className="text-primary-600 hover:underline">
+                      Privacy Policy
+                    </a>{' '}
+                    and consent to having my information stored for the purpose of this consultation. *
+                  </span>
                 </label>
-                <input
-                  type="email"
-                  id="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className="input"
-                  placeholder="john.doe@example.com"
-                />
               </div>
 
               {/* Error Message */}

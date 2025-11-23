@@ -1,16 +1,15 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { getTestimonials, Testimonial } from '@/lib/airtable';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Testimonial } from '@/lib/airtable';
 
 export default function Testimonials() {
-  // Hardcoded first testimonial
+  // Hardcoded first testimonial for instant page load
   const hardcodedTestimonial: Testimonial = useMemo(() => ({
     id: 'hardcoded-1',
-    firstName: 'Sarah',
-    lastName: 'Johnson',
-    note: 'Working with this coach completely transformed our financial life! We paid off $45,000 in debt in just 18 months and now have a fully funded emergency fund. The guidance and accountability were exactly what we needed to stay on track with the Baby Steps.',
-    createdAt: new Date().toISOString(),
+    name: 'Sarah Johnson',
+    notes: 'Working with this coach completely transformed our financial life! We paid off $45,000 in debt in just 18 months and now have a fully funded emergency fund. The guidance and accountability were exactly what we needed to stay on track with the Baby Steps.',
+    dateCreated: new Date().toISOString(),
   }), []);
 
   const [testimonials, setTestimonials] = useState<Testimonial[]>([hardcodedTestimonial]);
@@ -20,15 +19,31 @@ export default function Testimonials() {
   const [hasLoadedFromAirtable, setHasLoadedFromAirtable] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Lazy load testimonials from Airtable when user navigates past the first one
-  const loadTestimonialsFromAirtable = useCallback(async () => {
+  // Ref for Intersection Observer
+  const sectionRef = useRef<HTMLElement>(null);
+
+  // Lazy load testimonials from Airtable via API route with retry
+  const loadTestimonialsFromAirtable = useCallback(async (retryCount = 0) => {
     if (hasLoadedFromAirtable || isLoading) return;
 
     setIsLoading(true);
     setError(null);
 
     try {
-      const airtableTestimonials = await getTestimonials(10, 0);
+      const response = await fetch('/api/testimonials?limit=10&offset=0');
+      if (!response.ok) {
+        // Retry up to 2 times on failure
+        if (retryCount < 2) {
+          setIsLoading(false);
+          setTimeout(() => loadTestimonialsFromAirtable(retryCount + 1), 1000);
+          return;
+        }
+        // After retries, silently fail - we still have the hardcoded testimonial
+        console.warn('Failed to fetch testimonials after retries');
+        setHasLoadedFromAirtable(true); // Prevent further attempts
+        return;
+      }
+      const airtableTestimonials: Testimonial[] = await response.json();
 
       if (airtableTestimonials.length > 0) {
         // Combine hardcoded testimonial with Airtable testimonials
@@ -37,8 +52,15 @@ export default function Testimonials() {
 
       setHasLoadedFromAirtable(true);
     } catch (err) {
-      console.error('Error loading testimonials:', err);
-      setError('Unable to load additional testimonials');
+      // Retry up to 2 times on error
+      if (retryCount < 2) {
+        setIsLoading(false);
+        setTimeout(() => loadTestimonialsFromAirtable(retryCount + 1), 1000);
+        return;
+      }
+      console.warn('Error loading testimonials:', err);
+      // Silently fail - we still have the hardcoded testimonial to show
+      setHasLoadedFromAirtable(true); // Prevent further attempts
     } finally {
       setIsLoading(false);
     }
@@ -101,10 +123,47 @@ export default function Testimonials() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [goToPrevious, goToNext]);
 
+  // Smart loading: Load testimonials when section comes into view or nav link is clicked
+  useEffect(() => {
+    const section = sectionRef.current;
+    if (!section || hasLoadedFromAirtable) return;
+
+    // Intersection Observer for scroll detection
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !hasLoadedFromAirtable) {
+          loadTestimonialsFromAirtable();
+        }
+      },
+      { threshold: 0.1 } // Trigger when 10% of section is visible
+    );
+
+    observer.observe(section);
+
+    // Also listen for hash changes (when user clicks nav link)
+    const handleHashChange = () => {
+      if (window.location.hash === '#testimonials' && !hasLoadedFromAirtable) {
+        loadTestimonialsFromAirtable();
+      }
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+
+    // Check if already on testimonials section on mount
+    if (window.location.hash === '#testimonials') {
+      loadTestimonialsFromAirtable();
+    }
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('hashchange', handleHashChange);
+    };
+  }, [hasLoadedFromAirtable, loadTestimonialsFromAirtable]);
+
   const currentTestimonial = testimonials[currentIndex];
 
   return (
-    <section id="testimonials" className="section bg-secondary-50">
+    <section id="testimonials" ref={sectionRef} className="section bg-secondary-50">
       <div className="container-custom">
         {/* Section Header */}
         <div className="text-center mb-12">
@@ -180,7 +239,7 @@ export default function Testimonials() {
             {/* Testimonial Text */}
             <blockquote className="mb-8">
               <p className="text-lg md:text-xl text-secondary-700 leading-relaxed">
-                "{currentTestimonial.note}"
+                "{currentTestimonial.notes}"
               </p>
             </blockquote>
 
@@ -188,13 +247,12 @@ export default function Testimonials() {
             <div className="flex items-center justify-center space-x-3">
               <div className="w-12 h-12 rounded-full bg-primary-100 flex items-center justify-center">
                 <span className="text-primary-700 font-bold text-lg">
-                  {currentTestimonial.firstName.charAt(0)}
-                  {currentTestimonial.lastName.charAt(0)}
+                  {currentTestimonial.name.split(' ').map(n => n.charAt(0)).join('')}
                 </span>
               </div>
               <div className="text-left">
                 <p className="font-semibold text-secondary-900">
-                  {currentTestimonial.firstName} {currentTestimonial.lastName}
+                  {currentTestimonial.name}
                 </p>
                 <p className="text-sm text-secondary-600">Verified Client</p>
               </div>

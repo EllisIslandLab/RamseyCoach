@@ -163,6 +163,10 @@
            line-through;
   }
 
+  .calendar-day-fully-booked {
+    @apply bg-secondary-200 opacity-60 cursor-not-allowed hover:bg-secondary-200;
+  }
+
   /* Time slot button */
   .time-slot {
     @apply px-4 py-2 border-2 border-primary-300 rounded-lg

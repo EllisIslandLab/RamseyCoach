@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
+import { usePathname } from 'next/navigation';
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  const pathname = usePathname();
 
   // Handle scroll effect for header shadow
   useEffect(() => {
@@ -48,10 +49,16 @@ export default function Header() {
 
   const closeMenu = () => setIsMenuOpen(false);
 
+  // Build nav links - anchor links need full path when not on home page
+  const getAnchorHref = (anchor: string) => {
+    // If on home page, use just the anchor; otherwise prepend with /
+    return pathname === '/' ? anchor : `/${anchor}`;
+  };
+
   const navLinks = [
     { href: '/', label: 'Home' },
-    { href: '#testimonials', label: 'Testimonials' },
-    { href: '#booking', label: 'Consultation' },
+    { href: getAnchorHref('#testimonials'), label: 'Testimonials' },
+    { href: getAnchorHref('#booking'), label: 'Consultation' },
     { href: '/contact', label: 'Contact' },
   ];
 

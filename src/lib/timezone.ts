@@ -13,13 +13,56 @@ export const USA_TIMEZONES = {
 
 export type USATimezoneKey = keyof typeof USA_TIMEZONES;
 
+// Map of equivalent timezones to their US counterparts
+// This handles cases where browser detects a non-US timezone that shares the same offset
+const TIMEZONE_EQUIVALENTS: Record<string, string> = {
+  // EST equivalents (UTC-5)
+  'America/Havana': 'America/New_York',
+  'America/Nassau': 'America/New_York',
+  'America/Toronto': 'America/New_York',
+  'America/Detroit': 'America/New_York',
+  'America/Indiana/Indianapolis': 'America/New_York',
+  'America/Kentucky/Louisville': 'America/New_York',
+  // CST equivalents (UTC-6)
+  'America/Mexico_City': 'America/Chicago',
+  'America/Winnipeg': 'America/Chicago',
+  'America/Indiana/Knox': 'America/Chicago',
+  // MST equivalents (UTC-7)
+  'America/Edmonton': 'America/Denver',
+  'America/Phoenix': 'America/Denver',
+  // PST equivalents (UTC-8)
+  'America/Vancouver': 'America/Los_Angeles',
+  'America/Tijuana': 'America/Los_Angeles',
+};
+
+/**
+ * Normalize a timezone to a standard US timezone if possible
+ * @param timezone - IANA timezone name
+ * @returns Normalized US timezone or original if no mapping exists
+ */
+export function normalizeTimezone(timezone: string): string {
+  // Check if it's already a standard US timezone
+  if (Object.values(USA_TIMEZONES).includes(timezone as typeof USA_TIMEZONES[USATimezoneKey])) {
+    return timezone;
+  }
+  // Check if there's an equivalent mapping
+  if (timezone in TIMEZONE_EQUIVALENTS) {
+    return TIMEZONE_EQUIVALENTS[timezone];
+  }
+  // Return original if no mapping found
+  return timezone;
+}
+
 /**
  * Detect the user's timezone using browser API
+ * Normalizes non-US timezones to their US equivalents when possible
  * @returns Detected timezone name (e.g., 'America/New_York') or null if detection fails
  */
 export function detectUserTimezone(): string | null {
   try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    // Normalize to US timezone if possible (e.g., America/Havana -> America/New_York)
+    return normalizeTimezone(detected);
   } catch (error) {
     console.error('Failed to detect timezone:', error);
     return null;
@@ -53,7 +96,9 @@ export function getTimezoneFriendlyName(timezone: string): string {
     PST: 'Pacific Time (PST)',
   };
 
-  return timezoneMap[timezone] || timezone;
+  // First try to normalize the timezone, then look up the friendly name
+  const normalized = normalizeTimezone(timezone);
+  return timezoneMap[normalized] || timezoneMap[timezone] || timezone;
 }
 
 /**
@@ -69,13 +114,12 @@ export function convertFromEST(
   targetTimezone: string
 ): string {
   // If target timezone is an abbreviation, convert to IANA name
-  const targetTZ =
-    targetTimezone in USA_TIMEZONES
-      ? USA_TIMEZONES[targetTimezone as USATimezoneKey]
-      : targetTimezone;
+  // Also normalize equivalent timezones (e.g., America/Havana -> America/New_York)
+  let targetTZ = targetTimezone in USA_TIMEZONES
+    ? USA_TIMEZONES[targetTimezone as USATimezoneKey]
+    : normalizeTimezone(targetTimezone);
 
   // Create a date object in EST
-  const [hours, minutes] = time.split(':').map(Number);
   const dateTime = new Date(`${date}T${time}:00`);
 
   // Format in target timezone
@@ -99,15 +143,12 @@ export function convertFromEST(
 export function convertToEST(
   date: string,
   time: string,
-  userTimezone: string
+  _userTimezone: string
 ): string {
-  // If user timezone is an abbreviation, convert to IANA name
-  const userTZ =
-    userTimezone in USA_TIMEZONES
-      ? USA_TIMEZONES[userTimezone as USATimezoneKey]
-      : userTimezone;
+  // Note: userTimezone parameter kept for API consistency but not used
+  // since we're always converting TO EST regardless of source timezone
 
-  // Create a date object in user's timezone
+  // Create a date object
   const dateTime = new Date(`${date}T${time}:00`);
 
   // Format in EST
