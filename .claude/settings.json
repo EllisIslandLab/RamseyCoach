@@ -1,1 +1,231 @@
+{
+  "version": "1.0",
+  "description": "Claude Code settings optimized for RamseyCoach - Next.js booking platform with Airtable integration",
 
+  "fileSettings": {
+    "ignorePatterns": [
+      ".next/**",
+      "node_modules/**",
+      ".git/**",
+      "coverage/**",
+      "*.log",
+      ".env.local",
+      ".env.local.example",
+      "out/**",
+      "dist/**",
+      ".turbo/**"
+    ],
+    "includePatterns": [
+      "src/**/*.{ts,tsx}",
+      "public/**",
+      "*.json",
+      "*.js",
+      "*.ts",
+      "*.tsx",
+      "*.md",
+      ".eslintrc.json",
+      "tsconfig.json",
+      "tailwind.config.ts"
+    ]
+  },
+
+  "rules": {
+    "codeQuality": {
+      "typescript": {
+        "strictMode": true,
+        "checkUnusedLocals": true,
+        "checkUnusedParameters": true
+      },
+      "eslint": {
+        "enabled": true,
+        "config": ".eslintrc.json",
+        "nextJsRules": true
+      },
+      "files": {
+        "extension": [".ts", ".tsx"],
+        "maxFileSize": "500KB"
+      }
+    },
+    "security": {
+      "noSecrets": true,
+      "checkEnvironmentVariables": true,
+      "allowedEnvFiles": [".env.local"],
+      "excludeFromAnalysis": [".env.local", ".env.local.example"]
+    }
+  },
+
+  "project": {
+    "name": "RamseyCoach",
+    "type": "next.js",
+    "version": "15.5.6",
+    "language": "TypeScript",
+    "framework": "Next.js 15 with React 18",
+    "database": "Airtable",
+    "styling": "Tailwind CSS",
+    "description": "Personal financial coaching booking platform with Airtable backend"
+  },
+
+  "commands": {
+    "dev": {
+      "command": "npm run dev",
+      "description": "Start Next.js development server"
+    },
+    "build": {
+      "command": "npm run build",
+      "description": "Build Next.js production bundle"
+    },
+    "lint": {
+      "command": "npm run lint",
+      "description": "Run ESLint code quality checks"
+    },
+    "start": {
+      "command": "npm start",
+      "description": "Start Next.js production server"
+    }
+  },
+
+  "codeContext": {
+    "modules": {
+      "lib/airtable.ts": {
+        "description": "Airtable client and database operations",
+        "functions": [
+          "getTestimonials()",
+          "getAvailableSlots()",
+          "getFullyBookedDates()",
+          "createConsultation()",
+          "createClient()",
+          "createContactSubmission()"
+        ],
+        "tables": ["Testimonials", "Booked", "Clients", "Contacts"],
+        "purpose": "Handles all Airtable REST API operations with EST timezone handling"
+      },
+      "lib/timezone.ts": {
+        "description": "Timezone detection and conversion utilities",
+        "functions": [
+          "detectUserTimezone()",
+          "normalizeTimezone()",
+          "convertFromEST()",
+          "convertToEST()",
+          "getTimezoneFriendlyName()",
+          "formatTimeForDisplay()"
+        ],
+        "purpose": "Client/server-side timezone handling with America/New_York (EST) standard"
+      },
+      "components/BookingModal.tsx": {
+        "description": "Booking calendar and appointment selection modal",
+        "lines": 1017,
+        "features": ["Calendar view", "Time slot selection", "Client intake form", "Retry logic"],
+        "purpose": "Main booking interface with comprehensive client information collection"
+      },
+      "components/Testimonials.tsx": {
+        "description": "Testimonials carousel with lazy loading",
+        "lines": 250,
+        "features": ["Lazy loading from Airtable", "Retry logic", "Carousel navigation"],
+        "purpose": "Displays client testimonials with smart data fetching"
+      },
+      "components/Header.tsx": {
+        "description": "Navigation header with responsive menu",
+        "purpose": "Header with dynamic anchor links to home page sections from any page"
+      }
+    },
+    "pages": {
+      "pages/index.tsx": "Home page with hero, testimonials, booking section",
+      "pages/contact.tsx": "Contact form page",
+      "pages/privacy-policy.tsx": "Privacy policy page",
+      "pages/terms-of-service.tsx": "Terms of service page",
+      "pages/api/bookings.ts": "POST endpoint - Create consultation bookings",
+      "pages/api/availability.ts": "GET endpoint - Fetch available time slots for a date",
+      "pages/api/booked-dates.ts": "GET endpoint - Fetch fully booked dates for a month",
+      "pages/api/clients.ts": "POST endpoint - Create client records with intake form data",
+      "pages/api/contact.ts": "POST endpoint - Contact form submissions",
+      "pages/api/testimonials.ts": "GET endpoint - Testimonials from Airtable"
+    }
+  },
+
+  "environment": {
+    "requiredVariables": [
+      {
+        "name": "NEXT_PUBLIC_AIRTABLE_BASE_ID",
+        "scope": "public",
+        "description": "Airtable base ID"
+      },
+      {
+        "name": "AIRTABLE_API_TOKEN",
+        "scope": "private",
+        "description": "Airtable personal access token (server-side only)"
+      },
+      {
+        "name": "AIRTABLE_BOOKED_TABLE",
+        "scope": "private",
+        "description": "Table name for bookings (default: 'Booked')"
+      },
+      {
+        "name": "AIRTABLE_CLIENTS_TABLE",
+        "scope": "private",
+        "description": "Table name for client records (default: 'Clients')"
+      },
+      {
+        "name": "AIRTABLE_CONTACTS_TABLE",
+        "scope": "private",
+        "description": "Table name for contact submissions (default: 'Contacts')"
+      },
+      {
+        "name": "AIRTABLE_TESTIMONIALS_TABLE",
+        "scope": "private",
+        "description": "Table name for testimonials (default: 'Testimonials')"
+      }
+    ],
+    "note": "Copy .env.local.example to .env.local and fill in values"
+  },
+
+  "architecture": {
+    "routing": "Next.js Pages Router",
+    "rendering": "Mixed - SSG/SSR for pages, API routes for server logic",
+    "apiLayer": "Next.js API routes as middleware to Airtable REST API",
+    "styling": "Tailwind CSS with custom color palette",
+    "stateManagement": "React hooks with useCallback, useState, useRef",
+    "dataFetching": "Native fetch() with retry logic on API routes",
+    "timezone": "EST (America/New_York) standard with client detection and normalization",
+    "database": "Airtable with linked records (Clients → Booked)"
+  },
+
+  "conventions": {
+    "naming": {
+      "components": "PascalCase (.tsx files)",
+      "functions": "camelCase",
+      "constants": "UPPER_SNAKE_CASE",
+      "types": "PascalCase",
+      "apiRoutes": "kebab-case file names matching endpoint paths"
+    },
+    "imports": {
+      "pathAlias": "@/*",
+      "exampleUsage": "import { getTestimonials } from '@/lib/airtable'"
+    },
+    "typescript": {
+      "strictMode": true,
+      "target": "ES2020"
+    }
+  },
+
+  "notes": {
+    "critical": [
+      "Never commit .env.local or Airtable API token to git",
+      "EST timezone is standard - all times stored in UTC, converted for display",
+      "Booked records linked to Client records for data integrity",
+      "Fully booked date detection requires proper EST conversion"
+    ],
+    "features": [
+      "Comprehensive client intake form with validation",
+      "Smart retry logic on all API fetches (up to 2 retries)",
+      "Dynamic nav links work from any page",
+      "Timezone normalization (America/Havana → EST)",
+      "Phone number required when contact method is Phone/Text"
+    ],
+    "improvements": [
+      "Consider adding E2E testing with Playwright",
+      "Add unit tests for timezone and Airtable utilities",
+      "Consider Husky for pre-commit hooks",
+      "Add logging for API errors and retries"
+    ]
+  }
+}
