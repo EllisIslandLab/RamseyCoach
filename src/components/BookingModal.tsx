@@ -298,7 +298,7 @@ export default function BookingModal({ isOpen, onClose }: BookingModalProps) {
 
     // Validate phone number if contact method requires it
     if ((preferredContactMethod === 'Phone' || preferredContactMethod === 'Text') && !phone.trim()) {
-      setFormError('Please provide a phone number if you want us to contact you by phone or text');
+      setFormError('Please provide a phone number if you would like me to contact you by phone or text');
       return;
     }
 
@@ -672,7 +672,7 @@ export default function BookingModal({ isOpen, onClose }: BookingModalProps) {
                 </svg>
                 <p className="text-secondary-600">No available times for this date.</p>
                 <p className="text-sm text-secondary-500 mt-2">
-                  Please select a different date or contact us directly.
+                  Please select a different date or contact me directly.
                 </p>
               </div>
             )}
@@ -686,7 +686,7 @@ export default function BookingModal({ isOpen, onClose }: BookingModalProps) {
               Just a Few Details
             </h2>
             <p className="text-secondary-600 text-center mb-6">
-              A little personal information helps us prepare for your consultation.
+              A little personal information helps me prepare for your consultation.
             </p>
 
             {/* Booking Summary */}
@@ -899,7 +899,7 @@ export default function BookingModal({ isOpen, onClose }: BookingModalProps) {
                     onChange={(e) => setPrimaryFinancialConcern(e.target.value)}
                     rows={3}
                     className="input resize-none"
-                    placeholder="Tell us what's on your mind financially..."
+                    placeholder="Tell me what's on your mind financially..."
                   />
                 </div>
 

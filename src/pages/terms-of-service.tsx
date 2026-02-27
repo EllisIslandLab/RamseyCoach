@@ -9,7 +9,7 @@ export default function TermsOfService() {
         <title>Terms of Service | Money-Willo</title>
         <meta
           name="description"
-          content="Read our terms of service to understand the guidelines and policies for using our financial coaching services."
+          content="Read my terms of service to understand the guidelines and policies for using my financial coaching services."
         />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
@@ -33,20 +33,20 @@ export default function TermsOfService() {
 
                 <h2 className="text-2xl font-bold text-primary-700 mt-8 mb-4">1. Acceptance of Terms</h2>
                 <p className="text-secondary-700 mb-4">
-                  By accessing and using this website and our coaching services, you accept and agree to be bound by
-                  these Terms of Service. If you do not agree to these terms, please do not use our services.
+                  By accessing and using this website and my coaching services, you accept and agree to be bound by
+                  these Terms of Service. If you do not agree to these terms, please do not use my services.
                 </p>
 
                 <h2 className="text-2xl font-bold text-primary-700 mt-8 mb-4">2. Description of Services</h2>
                 <p className="text-secondary-700 mb-4">
-                  We provide financial coaching services designed to help individuals and families achieve financial
+                  I provide financial coaching services designed to help individuals and families achieve financial
                   wellness through education, accountability, and personalized guidance based on proven financial
                   principles.
                 </p>
 
                 <h2 className="text-2xl font-bold text-primary-700 mt-8 mb-4">3. Nature of Coaching Services</h2>
                 <p className="text-secondary-700 mb-4">
-                  <strong>Important Disclaimer:</strong> Our coaching services are educational in nature and do not
+                  <strong>Important Disclaimer:</strong> My coaching services are educational in nature and do not
                   constitute:
                 </p>
                 <ul className="list-disc list-inside text-secondary-700 mb-4 space-y-2">
@@ -75,7 +75,7 @@ export default function TermsOfService() {
 
                 <h2 className="text-2xl font-bold text-primary-700 mt-8 mb-4">5. Booking and Cancellation Policy</h2>
                 <p className="text-secondary-700 mb-4">
-                  <strong>Booking:</strong> Consultations can be booked through our online booking system. You will
+                  <strong>Booking:</strong> Consultations can be booked through my online booking system. You will
                   receive a confirmation email upon successful booking.
                 </p>
                 <p className="text-secondary-700 mb-4">
@@ -86,19 +86,19 @@ export default function TermsOfService() {
                 <h2 className="text-2xl font-bold text-primary-700 mt-8 mb-4">6. Payment Terms</h2>
                 <p className="text-secondary-700 mb-4">
                   Payment for coaching services is due at the time of booking or as otherwise agreed upon in writing.
-                  We accept various payment methods as indicated during the booking process.
+                  I accept various payment methods as indicated during the booking process.
                 </p>
 
                 <h2 className="text-2xl font-bold text-primary-700 mt-8 mb-4">7. Refund Policy</h2>
                 <p className="text-secondary-700 mb-4">
                   Free consultations are provided at no charge. For paid services, refunds may be available under
-                  certain circumstances as outlined in your service agreement. Please contact us to discuss refund
+                  certain circumstances as outlined in your service agreement. Please contact me to discuss refund
                   requests.
                 </p>
 
                 <h2 className="text-2xl font-bold text-primary-700 mt-8 mb-4">8. Confidentiality</h2>
                 <p className="text-secondary-700 mb-4">
-                  We maintain strict confidentiality regarding your personal and financial information shared during
+                  I maintain strict confidentiality regarding your personal and financial information shared during
                   coaching sessions. Information will not be shared with third parties except as required by law or
                   with your explicit consent.
                 </p>
@@ -106,22 +106,22 @@ export default function TermsOfService() {
                 <h2 className="text-2xl font-bold text-primary-700 mt-8 mb-4">9. Intellectual Property</h2>
                 <p className="text-secondary-700 mb-4">
                   All content on this website, including text, graphics, logos, and coaching materials, is the property
-                  of our coaching practice or our licensors and is protected by copyright and other intellectual
+                  of my coaching practice or my licensors and is protected by copyright and other intellectual
                   property laws. You may not reproduce, distribute, or create derivative works without written
                   permission.
                 </p>
 
                 <h2 className="text-2xl font-bold text-primary-700 mt-8 mb-4">10. Limitation of Liability</h2>
                 <p className="text-secondary-700 mb-4">
-                  Our coaching services are provided "as is" without any warranties. We are not liable for any
-                  financial losses, damages, or consequences resulting from actions taken or not taken based on our
+                  My coaching services are provided "as is" without any warranties. I am not liable for any
+                  financial losses, damages, or consequences resulting from actions taken or not taken based on my
                   coaching advice. You acknowledge that all financial decisions are ultimately your responsibility.
                 </p>
 
                 <h2 className="text-2xl font-bold text-primary-700 mt-8 mb-4">11. Indemnification</h2>
                 <p className="text-secondary-700 mb-4">
-                  You agree to indemnify and hold harmless our coaching practice, its owners, and employees from any
-                  claims, damages, or expenses arising from your use of our services or violation of these terms.
+                  You agree to indemnify and hold harmless my coaching practice and its owner from any
+                  claims, damages, or expenses arising from your use of my services or violation of these terms.
                 </p>
 
                 <h2 className="text-2xl font-bold text-primary-700 mt-8 mb-4">12. Termination</h2>
@@ -132,20 +132,20 @@ export default function TermsOfService() {
 
                 <h2 className="text-2xl font-bold text-primary-700 mt-8 mb-4">13. Modifications to Terms</h2>
                 <p className="text-secondary-700 mb-4">
-                  We reserve the right to modify these Terms of Service at any time. Changes will be effective
-                  immediately upon posting to this website. Your continued use of our services constitutes acceptance
+                  I reserve the right to modify these Terms of Service at any time. Changes will be effective
+                  immediately upon posting to this website. Your continued use of my services constitutes acceptance
                   of any modifications.
                 </p>
 
                 <h2 className="text-2xl font-bold text-primary-700 mt-8 mb-4">14. Governing Law</h2>
                 <p className="text-secondary-700 mb-4">
                   These Terms of Service are governed by the laws of [Your State/Country]. Any disputes arising from
-                  these terms or our services shall be resolved in the courts of [Your Jurisdiction].
+                  these terms or my services shall be resolved in the courts of [Your Jurisdiction].
                 </p>
 
                 <h2 className="text-2xl font-bold text-primary-700 mt-8 mb-4">15. Contact Information</h2>
                 <p className="text-secondary-700 mb-4">
-                  If you have any questions about these Terms of Service, please contact us at:
+                  If you have any questions about these Terms of Service, please contact me at:
                 </p>
                 <div className="bg-primary-50 p-6 rounded-lg">
                   <p className="text-secondary-700">

@@ -49,7 +49,7 @@ export default function Contact() {
         throw new Error('Failed to submit form');
       }
 
-      setSubmitMessage({ type: 'success', text: 'Message sent successfully! We\'ll get back to you soon.' });
+      setSubmitMessage({ type: 'success', text: 'Message sent successfully! I\'ll get back to you soon.' });
       (e.target as HTMLFormElement).reset();
     } catch (error) {
       console.error('Error submitting form:', error);
@@ -64,7 +64,7 @@ export default function Contact() {
         <title>Contact Us | Money-Willo</title>
         <meta
           name="description"
-          content="Get in touch with our certified financial coaching team. We're here to help you achieve financial peace."
+          content="Get in touch for personal financial coaching. I'm here to help you achieve financial peace."
         />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
 
@@ -77,7 +77,7 @@ export default function Contact() {
         <meta property="og:title" content="Contact Us | Money-Willo" />
         <meta
           property="og:description"
-          content="Get in touch with our certified financial coaching team. We're here to help you achieve financial peace."
+          content="Get in touch for personal financial coaching. I'm here to help you achieve financial peace."
         />
         <meta property="og:image" content="https://ramseycoach.com/images/og-image.jpg" />
 
@@ -87,7 +87,7 @@ export default function Contact() {
         <meta name="twitter:title" content="Contact Us | Money-Willo" />
         <meta
           name="twitter:description"
-          content="Get in touch with our certified financial coaching team. We're here to help you achieve financial peace."
+          content="Get in touch for personal financial coaching. I'm here to help you achieve financial peace."
         />
         <meta name="twitter:image" content="https://ramseycoach.com/images/og-image.jpg" />
       </Head>
@@ -101,8 +101,8 @@ export default function Contact() {
             <div className="text-center mb-12">
               <h1 className="text-primary-700 mb-4">Get In Touch</h1>
               <p className="text-secondary-600 text-lg max-w-2xl mx-auto">
-                Have questions about financial coaching? Want to learn more about how we can help you
-                achieve financial freedom? We'd love to hear from you.
+                Have questions about financial coaching? Want to learn more about how I can help you
+                achieve financial freedom? I&apos;d love to hear from you.
               </p>
             </div>
 
@@ -241,7 +241,7 @@ export default function Contact() {
 
               {/* Contact Form Placeholder */}
               <div className="bg-white rounded-lg shadow-lg p-8">
-                <h2 className="text-2xl font-bold text-primary-700 mb-6">Send Us a Message</h2>
+                <h2 className="text-2xl font-bold text-primary-700 mb-6">Send Me a Message</h2>
 
                 <form className="space-y-4" onSubmit={handleSubmit}>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -310,7 +310,7 @@ export default function Contact() {
                       id="subject"
                       name="subject"
                       className="input"
-                      placeholder="How can we help you?"
+                      placeholder="How can I help you?"
                     />
                   </div>
 
@@ -323,7 +323,7 @@ export default function Contact() {
                       name="message"
                       rows={5}
                       className="input resize-none"
-                      placeholder="Tell us about your financial goals..."
+                      placeholder="Tell me about your financial goals..."
                     />
                   </div>
 
@@ -338,7 +338,7 @@ export default function Contact() {
                   </button>
 
                   <p className="text-xs text-secondary-500 text-center">
-                    We'll respond to your inquiry within 24 hours during business days.
+                    I&apos;ll respond to your inquiry within 24–48 hours.
                   </p>
                 </form>
               </div>

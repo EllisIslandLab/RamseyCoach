@@ -32,7 +32,7 @@ export default function Footer() {
                 Contact Form
               </Link>
               <p className="text-secondary-300 text-sm leading-relaxed">
-                Submit a contact form and we&apos;ll get back to you within 24–48 hours.
+                Submit a contact form and I&apos;ll get back to you within 24–48 hours.
               </p>
             </div>
           </div>

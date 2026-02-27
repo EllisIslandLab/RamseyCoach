@@ -9,7 +9,7 @@ export default function PrivacyPolicy() {
         <title>Privacy Policy | Money-Willo</title>
         <meta
           name="description"
-          content="Read our privacy policy to understand how we collect, use, and protect your personal information."
+          content="Read my privacy policy to understand how I collect, use, and protect your personal information."
         />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
@@ -33,57 +33,57 @@ export default function PrivacyPolicy() {
 
                 <h2 className="text-2xl font-bold text-primary-700 mt-8 mb-4">1. Introduction</h2>
                 <p className="text-secondary-700 mb-4">
-                  This Privacy Policy describes how we collect, use, and protect your personal information when you
-                  visit our website and use our services. Your privacy is important to us, and we are committed to
+                  This Privacy Policy describes how I collect, use, and protect your personal information when you
+                  visit my website and use my services. Your privacy is important to me, and I am committed to
                   protecting your personal information.
                 </p>
 
-                <h2 className="text-2xl font-bold text-primary-700 mt-8 mb-4">2. Information We Collect</h2>
+                <h2 className="text-2xl font-bold text-primary-700 mt-8 mb-4">2. Information I Collect</h2>
                 <p className="text-secondary-700 mb-4">
-                  We may collect the following types of information:
+                  I may collect the following types of information:
                 </p>
                 <ul className="list-disc list-inside text-secondary-700 mb-4 space-y-2">
                   <li>Personal identification information (name, email address, phone number)</li>
                   <li>Financial information provided during coaching sessions</li>
                   <li>Booking and appointment information</li>
                   <li>Website usage data and analytics</li>
-                  <li>Communications between you and our coaching team</li>
+                  <li>Communications between you and me</li>
                 </ul>
 
-                <h2 className="text-2xl font-bold text-primary-700 mt-8 mb-4">3. How We Use Your Information</h2>
+                <h2 className="text-2xl font-bold text-primary-700 mt-8 mb-4">3. How I Use Your Information</h2>
                 <p className="text-secondary-700 mb-4">
-                  We use your information for the following purposes:
+                  I use your information for the following purposes:
                 </p>
                 <ul className="list-disc list-inside text-secondary-700 mb-4 space-y-2">
                   <li>To provide financial coaching services</li>
                   <li>To schedule and manage appointments</li>
-                  <li>To communicate with you about our services</li>
+                  <li>To communicate with you about my services</li>
                   <li>To send appointment reminders and follow-ups</li>
-                  <li>To improve our website and services</li>
+                  <li>To improve my website and services</li>
                   <li>To comply with legal obligations</li>
                 </ul>
 
                 <h2 className="text-2xl font-bold text-primary-700 mt-8 mb-4">4. Information Sharing and Disclosure</h2>
                 <p className="text-secondary-700 mb-4">
-                  We do not sell, trade, or rent your personal information to third parties. We may share your
+                  I do not sell, trade, or rent your personal information to third parties. I may share your
                   information with:
                 </p>
                 <ul className="list-disc list-inside text-secondary-700 mb-4 space-y-2">
-                  <li>Service providers who assist in operating our website and conducting our business</li>
-                  <li>Legal authorities when required by law or to protect our rights</li>
+                  <li>Service providers who assist in operating my website and conducting my business</li>
+                  <li>Legal authorities when required by law or to protect my rights</li>
                   <li>Third parties with your explicit consent</li>
                 </ul>
 
                 <h2 className="text-2xl font-bold text-primary-700 mt-8 mb-4">5. Data Security</h2>
                 <p className="text-secondary-700 mb-4">
-                  We implement appropriate technical and organizational measures to protect your personal information
+                  I implement appropriate technical and organizational measures to protect your personal information
                   against unauthorized access, alteration, disclosure, or destruction. However, no method of
                   transmission over the Internet is 100% secure.
                 </p>
 
                 <h2 className="text-2xl font-bold text-primary-700 mt-8 mb-4">6. Cookies and Tracking Technologies</h2>
                 <p className="text-secondary-700 mb-4">
-                  Our website may use cookies and similar tracking technologies to enhance your browsing experience
+                  My website may use cookies and similar tracking technologies to enhance your browsing experience
                   and analyze website traffic. You can control cookie settings through your browser preferences.
                 </p>
 
@@ -101,19 +101,19 @@ export default function PrivacyPolicy() {
 
                 <h2 className="text-2xl font-bold text-primary-700 mt-8 mb-4">8. Children's Privacy</h2>
                 <p className="text-secondary-700 mb-4">
-                  Our services are not directed to individuals under the age of 18. We do not knowingly collect
+                  My services are not directed to individuals under the age of 18. I do not knowingly collect
                   personal information from children.
                 </p>
 
                 <h2 className="text-2xl font-bold text-primary-700 mt-8 mb-4">9. Changes to This Privacy Policy</h2>
                 <p className="text-secondary-700 mb-4">
-                  We may update this Privacy Policy from time to time. We will notify you of any changes by posting
+                  I may update this Privacy Policy from time to time. I will notify you of any changes by posting
                   the new Privacy Policy on this page and updating the "Last Updated" date.
                 </p>
 
-                <h2 className="text-2xl font-bold text-primary-700 mt-8 mb-4">10. Contact Us</h2>
+                <h2 className="text-2xl font-bold text-primary-700 mt-8 mb-4">10. Contact Me</h2>
                 <p className="text-secondary-700 mb-4">
-                  If you have any questions about this Privacy Policy, please contact us at:
+                  If you have any questions about this Privacy Policy, please contact me at:
                 </p>
                 <div className="bg-primary-50 p-6 rounded-lg">
                   <p className="text-secondary-700">
