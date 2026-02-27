@@ -28,7 +28,7 @@ export default function Hero() {
               </p>
 
               <p className="text-secondary-600 mb-8 max-w-2xl mx-auto lg:mx-0">
-                As a Ramsey Preferred Coach, I&apos;m dedicated to helping you build a solid
+                As a Financial Coach and Treasurer of Willo-Hill Church, I&apos;m dedicated to helping you build a solid
                 financial foundation, eliminate debt, and create lasting wealth for generations
                 to come. Whether you&apos;re just starting your financial journey or looking to
                 optimize your path to financial freedom, I&apos;m here to guide you every step of the
@@ -60,7 +60,7 @@ export default function Hero() {
                     />
                   </svg>
                   <span className="text-secondary-600 font-medium">
-                    Ramsey Preferred Coach
+                    Financial Coach &amp; Treasurer of Willo-Hill Church
                   </span>
                 </div>
 

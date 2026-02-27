@@ -6,7 +6,7 @@ export default function TermsOfService() {
   return (
     <>
       <Head>
-        <title>Terms of Service | Ramsey Preferred Coach</title>
+        <title>Terms of Service | Money-Willo</title>
         <meta
           name="description"
           content="Read our terms of service to understand the guidelines and policies for using our financial coaching services."

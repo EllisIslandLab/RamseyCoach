@@ -38,7 +38,11 @@ const resultVal = 'font-bold text-primary-700 text-sm';
 const bigVal = 'font-bold text-primary-700 text-xl';
 const grid2 = 'grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5';
 
-type CalcId = 'mortgage' | 'payoff' | 'loan' | 'compound' | 'retirement';
+type CalcId = 'mortgage' | 'payoff' | 'loan' | 'compound' | 'retirement' | 'eir';
+
+type EIRRow = { id: string; name: string; balance: string; rate: string };
+const eirUid = () => Math.random().toString(36).slice(2, 9);
+const eirNv  = (s: string) => parseFloat(s) || 0;
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -222,7 +226,16 @@ export default function ToolsPage() {
     });
   };
 
-  // ── 5. 401K / Retirement ────────────────────────────────────────────────────
+  // ── 5. Effective Interest Rate ──────────────────────────────────────────────
+  const [eir_rows, setEirRows] = useState<EIRRow[]>([
+    { id: 'e1', name: 'Mortgage',  balance: '', rate: '' },
+    { id: 'e2', name: 'Car Loan',  balance: '', rate: '' },
+  ]);
+  const eir_totalBal = eir_rows.reduce((s, r) => s + eirNv(r.balance), 0);
+  const eir_weighted = eir_rows.reduce((s, r) => s + eirNv(r.balance) * eirNv(r.rate), 0);
+  const eir_rate     = eir_totalBal > 0 ? eir_weighted / eir_totalBal : 0;
+
+  // ── 6. 401K / Retirement ────────────────────────────────────────────────────
   const [ret_currAge, setRetCurrAge] = useState('35');
   const [ret_retireAge, setRetRetireAge] = useState('65');
   const [ret_bal, setRetBal] = useState('50000');
@@ -278,6 +291,8 @@ export default function ToolsPage() {
 
     setRetRes({ projected: balance, totalContrib, totalGrowth: balance - totalContrib, table });
   };
+
+  const eir_inp = inputCls + ' text-right';
 
   // ─── Calculator definitions ───────────────────────────────────────────────
 
@@ -596,6 +611,84 @@ export default function ToolsPage() {
         </div>
       ),
     },
+    {
+      id: 'eir',
+      title: 'Effective Interest Rate Calculator',
+      description:
+        "Your effective interest rate is the balance-weighted average across all your debts — it tells you the true blended cost of your debt. Use it to evaluate consolidation offers or track your progress as you pay down balances.",
+      content: (
+        <div>
+          {/* Column headers */}
+          <div className="hidden sm:grid sm:grid-cols-[1fr_8rem_7rem_1.5rem] gap-2 mb-2">
+            <span className="text-xs font-bold uppercase tracking-wide text-secondary-400 pl-1">Debt Name</span>
+            <span className="text-xs font-bold uppercase tracking-wide text-secondary-400 text-right">Balance ($)</span>
+            <span className="text-xs font-bold uppercase tracking-wide text-secondary-400 text-right">Rate (%)</span>
+            <span />
+          </div>
+
+          <div className="space-y-2 mb-4">
+            {eir_rows.map((row, i) => (
+              <div key={row.id} className="flex gap-2 items-center flex-wrap sm:flex-nowrap">
+                <input
+                  className={inputCls + ' flex-1 min-w-0'}
+                  value={row.name}
+                  onChange={e => setEirRows(eir_rows.map((r, j) => j === i ? { ...r, name: e.target.value } : r))}
+                  placeholder="Debt name"
+                />
+                <input
+                  className={eir_inp + ' w-32 flex-shrink-0'}
+                  type="number" min="0"
+                  value={row.balance}
+                  onChange={e => setEirRows(eir_rows.map((r, j) => j === i ? { ...r, balance: e.target.value } : r))}
+                  placeholder="Balance"
+                />
+                <input
+                  className={eir_inp + ' w-24 flex-shrink-0'}
+                  type="number" min="0" step="0.1"
+                  value={row.rate}
+                  onChange={e => setEirRows(eir_rows.map((r, j) => j === i ? { ...r, rate: e.target.value } : r))}
+                  placeholder="Rate %"
+                />
+                <button
+                  onClick={() => setEirRows(eir_rows.filter((_, j) => j !== i))}
+                  className="text-secondary-300 hover:text-red-400 transition-colors font-bold text-xl leading-none px-1 flex-shrink-0"
+                  title="Remove"
+                >×</button>
+              </div>
+            ))}
+            <button
+              onClick={() => setEirRows([...eir_rows, { id: eirUid(), name: '', balance: '', rate: '' }])}
+              className="text-primary-600 hover:text-primary-800 text-sm font-semibold flex items-center gap-1 mt-2 transition-colors"
+            >
+              <span className="font-bold text-base">+</span> Add Debt
+            </button>
+          </div>
+
+          {eir_rate > 0 && (
+            <div className={resultBox}>
+              <div className={`${resultRow} mb-1`}>
+                <span className="text-secondary-700 text-sm font-semibold">Effective Interest Rate</span>
+                <span className={bigVal}>{eir_rate.toFixed(2)}%</span>
+              </div>
+              <div className={resultRow}>
+                <span className={resultLabel}>Total Debt Balance</span>
+                <span className={resultVal}>{fmt$(eir_totalBal)}</span>
+              </div>
+              <div className={resultRow}>
+                <span className={resultLabel}>Debts Entered</span>
+                <span className={resultVal}>{eir_rows.filter(r => eirNv(r.balance) > 0).length}</span>
+              </div>
+              <div className="mt-3 pt-3 border-t border-primary-100">
+                <p className="text-secondary-500 text-xs leading-relaxed">
+                  This is the balance-weighted average of all your interest rates. Use it as a benchmark
+                  when evaluating consolidation offers — and watch it drop as you eliminate debt.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      ),
+    },
   ];
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -603,7 +696,7 @@ export default function ToolsPage() {
   return (
     <>
       <Head>
-        <title>Financial Tools | Ramsey Preferred Coach</title>
+        <title>Financial Tools | Money-Willo</title>
         <meta
           name="description"
           content="Free financial calculators and budget planning tools to help you get out of debt, build wealth, and take control of your money."

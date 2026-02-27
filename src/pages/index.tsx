@@ -12,10 +12,10 @@ export default function Home() {
   return (
     <>
       <Head>
-        <title>Ramsey Preferred Coach | Financial Coaching & Consulting</title>
+        <title>Money-Willo | Financial Coaching & Consulting</title>
         <meta
           name="description"
-          content="Achieve financial peace with personalized coaching from a certified Ramsey Preferred Coach. Get out of debt, build wealth, and secure your financial future."
+          content="Achieve financial peace with personalized coaching from a Financial Coach and Treasurer of Willo-Hill Church. Get out of debt, build wealth, and secure your financial future."
         />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.ico" />
@@ -26,20 +26,20 @@ export default function Home() {
         {/* Open Graph / Facebook */}
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://ramseycoach.com/" />
-        <meta property="og:title" content="Ramsey Preferred Coach | Financial Coaching & Consulting" />
+        <meta property="og:title" content="Money-Willo | Financial Coaching & Consulting" />
         <meta
           property="og:description"
-          content="Achieve financial peace with personalized coaching from a certified Ramsey Preferred Coach. Get out of debt, build wealth, and secure your financial future."
+          content="Achieve financial peace with personalized coaching from a Financial Coach and Treasurer of Willo-Hill Church. Get out of debt, build wealth, and secure your financial future."
         />
         <meta property="og:image" content="https://ramseycoach.com/images/og-image.jpg" />
 
         {/* Twitter */}
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:url" content="https://ramseycoach.com/" />
-        <meta name="twitter:title" content="Ramsey Preferred Coach | Financial Coaching & Consulting" />
+        <meta name="twitter:title" content="Money-Willo | Financial Coaching & Consulting" />
         <meta
           name="twitter:description"
-          content="Achieve financial peace with personalized coaching from a certified Ramsey Preferred Coach. Get out of debt, build wealth, and secure your financial future."
+          content="Achieve financial peace with personalized coaching from a Financial Coach and Treasurer of Willo-Hill Church. Get out of debt, build wealth, and secure your financial future."
         />
         <meta name="twitter:image" content="https://ramseycoach.com/images/og-image.jpg" />
 
@@ -50,8 +50,8 @@ export default function Home() {
             __html: JSON.stringify({
               '@context': 'https://schema.org',
               '@type': 'FinancialService',
-              name: 'Ramsey Preferred Coach',
-              description: 'Certified Ramsey Preferred Coach providing personalized financial coaching and consulting services.',
+              name: 'Money-Willo',
+              description: 'Financial Coach and Treasurer of Willo-Hill Church providing personalized financial coaching and consulting services.',
               url: 'https://ramseycoach.com',
               logo: 'https://ramseycoach.com/images/logo.png',
               image: 'https://ramseycoach.com/images/og-image.jpg',

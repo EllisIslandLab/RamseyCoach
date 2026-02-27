@@ -148,7 +148,7 @@ export default function Footer() {
           <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
             {/* Copyright */}
             <p className="text-secondary-400 text-sm">
-              © {currentYear} Ramsey Preferred Coach. All rights reserved.
+              © {currentYear} Money-Willo. All rights reserved.
             </p>
 
             {/* Certification Badge */}
@@ -165,7 +165,7 @@ export default function Footer() {
                 />
               </svg>
               <span className="text-secondary-400 text-sm font-medium">
-                Certified Ramsey Preferred Coach
+                Financial Coach &amp; Treasurer of Willo-Hill Church
               </span>
             </div>
           </div>

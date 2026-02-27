@@ -96,7 +96,7 @@ export default function Header() {
 
               {/* Banner text */}
               <span className="text-white font-bold text-lg md:text-xl">
-                Ramsey Preferred Coach
+                Money-Willo
               </span>
             </Link>
 

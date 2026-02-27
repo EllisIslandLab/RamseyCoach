@@ -61,7 +61,7 @@ export default function Contact() {
   return (
     <>
       <Head>
-        <title>Contact Us | Ramsey Preferred Coach</title>
+        <title>Contact Us | Money-Willo</title>
         <meta
           name="description"
           content="Get in touch with our certified financial coaching team. We're here to help you achieve financial peace."
@@ -74,7 +74,7 @@ export default function Contact() {
         {/* Open Graph / Facebook */}
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://ramseycoach.com/contact" />
-        <meta property="og:title" content="Contact Us | Ramsey Preferred Coach" />
+        <meta property="og:title" content="Contact Us | Money-Willo" />
         <meta
           property="og:description"
           content="Get in touch with our certified financial coaching team. We're here to help you achieve financial peace."
@@ -84,7 +84,7 @@ export default function Contact() {
         {/* Twitter */}
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:url" content="https://ramseycoach.com/contact" />
-        <meta name="twitter:title" content="Contact Us | Ramsey Preferred Coach" />
+        <meta name="twitter:title" content="Contact Us | Money-Willo" />
         <meta
           name="twitter:description"
           content="Get in touch with our certified financial coaching team. We're here to help you achieve financial peace."

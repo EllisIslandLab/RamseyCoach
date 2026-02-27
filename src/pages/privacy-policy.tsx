@@ -6,7 +6,7 @@ export default function PrivacyPolicy() {
   return (
     <>
       <Head>
-        <title>Privacy Policy | Ramsey Preferred Coach</title>
+        <title>Privacy Policy | Money-Willo</title>
         <meta
           name="description"
           content="Read our privacy policy to understand how we collect, use, and protect your personal information."

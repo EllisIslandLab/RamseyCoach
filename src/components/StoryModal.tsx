@@ -130,7 +130,7 @@ export default function StoryModal({ isOpen, onClose }: StoryModalProps) {
           </p>
 
           <h3 className="text-2xl font-bold text-primary-600 mt-8 mb-4">
-            Why I Became a Ramsey Preferred Coach
+            Why I Became a Financial Coach
           </h3>
 
           <p className="text-secondary-700 mb-4">

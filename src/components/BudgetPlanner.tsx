@@ -6,7 +6,6 @@ import StatementImporter, { AppliedItem } from './StatementImporter';
 interface NVRow   { id: string; name: string; value: string; }
 interface AmtRow  { id: string; name: string; amount: string; }
 interface SinkRow { id: string; name: string; amount: string; freq: FreqVal; }
-interface EIRRow  { id: string; name: string; balance: string; rate: string; }
 type FreqVal = 'monthly' | 'every2' | 'quarterly' | 'twice' | 'yearly';
 
 /* ─── Module-level helpers ─────────────────────────────────────────────────── */
@@ -105,11 +104,6 @@ const dfSavings  = (): AmtRow[]  => [
   { id: uid(), name: 'Vacation',                  amount: '' },
   { id: uid(), name: 'Emergency Fund',            amount: '' },
 ];
-const dfEIR      = (): EIRRow[]  => [
-  { id: uid(), name: 'Mortgage',  balance: '', rate: '' },
-  { id: uid(), name: 'Car Loan',  balance: '', rate: '' },
-];
-
 /* ─── localStorage persistence ─────────────────────────────────────────────── */
 const LS_KEY = 'ramseycoach_budget';
 
@@ -273,7 +267,7 @@ export default function BudgetPlanner() {
 
   /* Sections open/closed */
   const [open, setOpen] = useState<Record<string, boolean>>(
-    () => (saved?.open as Record<string, boolean>) ?? { A: true, B: true, C: false, D: false, E: false, F: false }
+    () => (saved?.open as Record<string, boolean>) ?? { A: true, B: true, C: false, D: false, E: false }
   );
   const tog = (s: string) => setOpen(p => ({ ...p, [s]: !p[s] }));
 
@@ -299,17 +293,14 @@ export default function BudgetPlanner() {
   /* Section E */
   const [savings, setSavings] = useState<AmtRow[]>(() => (saved?.savings as AmtRow[]) ?? dfSavings());
 
-  /* Section F */
-  const [eirRows, setEirRows] = useState<EIRRow[]>(() => (saved?.eirRows as EIRRow[]) ?? dfEIR());
-
   /* ── Auto-save to localStorage on every state change ─────────────────── */
   useEffect(() => {
     localStorage.setItem(LS_KEY, JSON.stringify({
       open, assets, debts, incRows, mortRows, autoRows, giveRows,
-      subs, insRows, sinks, spending, neededRows, savings, eirRows,
+      subs, insRows, sinks, spending, neededRows, savings,
     }));
   }, [open, assets, debts, incRows, mortRows, autoRows, giveRows,
-      subs, insRows, sinks, spending, neededRows, savings, eirRows]);
+      subs, insRows, sinks, spending, neededRows, savings]);
 
   /* ── Derived calculations ─────────────────────────────────────────────── */
   const totalAssets  = assets.reduce((s, r) => s + nv(r.value), 0);
@@ -334,10 +325,6 @@ export default function BudgetPlanner() {
   const totalExpenses = totalFixed + totalVar;
   const leftover      = totalIncome - totalExpenses - totalSavings;
 
-  const eirTotalBal   = eirRows.reduce((s, r) => s + nv(r.balance), 0);
-  const eirWeighted   = eirRows.reduce((s, r) => s + nv(r.balance) * nv(r.rate), 0);
-  const effectiveRate = eirTotalBal > 0 ? eirWeighted / eirTotalBal : 0;
-
   /* ── Reset / Print ────────────────────────────────────────────────────── */
   const handleReset = () => {
     if (!window.confirm('Reset all budget data? This cannot be undone.')) return;
@@ -348,12 +335,11 @@ export default function BudgetPlanner() {
     setSubs(dfSubs());       setInsRows(dfIns());     setSinks(dfSinks());
     setSpending(dfSpending()); setNeededRows(dfNeeded());
     setSavings(dfSavings());
-    setEirRows(dfEIR());
-    setOpen({ A: true, B: true, C: false, D: false, E: false, F: false });
+    setOpen({ A: true, B: true, C: false, D: false, E: false });
   };
 
   const handlePrint = () => {
-    setOpen({ A: true, B: true, C: true, D: true, E: true, F: true });
+    setOpen({ A: true, B: true, C: true, D: true, E: true });
     setTimeout(() => window.print(), 150);
   };
 
@@ -386,7 +372,7 @@ export default function BudgetPlanner() {
   const handleDownload = (format: 'xlsx' | 'ods') => {
     const $ = (n: number) => n || 0;
     const rows: (string | number)[][] = [
-      ['Ramsey Preferred Coach — Monthly Budget'],
+      ['Money-Willo — Monthly Budget'],
       [`Generated: ${new Date().toLocaleDateString()}`],
       [],
       ['INCOME', 'Monthly Amount'],
@@ -778,89 +764,6 @@ export default function BudgetPlanner() {
         </p>
         <AmtRowList rows={savings} setRows={setSavings} addLabel="Add Savings Bucket" />
         <SectionTotal label="Total Monthly Savings" amount={totalSavings} />
-      </SectionCard>
-
-      {/* ── F: Effective Interest Rate ───────────────────────────────────── */}
-      <SectionCard
-        letter="F" title="Effective Interest Rate" subtitle="Your blended cost of debt across all loans"
-        badge={effectiveRate > 0 ? `${effectiveRate.toFixed(2)}%` : undefined}
-        isOpen={open.F} onToggle={() => tog('F')}
-      >
-        <p className="text-secondary-500 text-xs italic mb-4 leading-relaxed">
-          Enter each debt with its current balance and annual interest rate. The effective rate is the
-          balance-weighted average — the lower this number, the better. Use the same balances from Section A above.
-        </p>
-
-        {/* Column headers */}
-        <div className="hidden sm:grid sm:grid-cols-[1fr_7rem_6rem_1.5rem] gap-2 mb-2">
-          <span className="text-xs font-bold uppercase tracking-wide text-secondary-400 pl-1">Debt Name</span>
-          <span className="text-xs font-bold uppercase tracking-wide text-secondary-400 text-right">Balance ($)</span>
-          <span className="text-xs font-bold uppercase tracking-wide text-secondary-400 text-right">Rate (%)</span>
-          <span />
-        </div>
-
-        <div className="space-y-2">
-          {eirRows.map((row, i) => (
-            <div key={row.id} className="flex gap-2 items-center flex-wrap sm:flex-nowrap">
-              <input
-                className={`${inp} flex-1 min-w-0`}
-                value={row.name}
-                onChange={e => setEirRows(eirRows.map((r, j) => j === i ? { ...r, name: e.target.value } : r))}
-                placeholder="Debt name"
-              />
-              <input
-                className={`${inp} w-28 flex-shrink-0 text-right`}
-                type="number" min="0"
-                value={row.balance}
-                onChange={e => setEirRows(eirRows.map((r, j) => j === i ? { ...r, balance: e.target.value } : r))}
-                placeholder="Balance"
-              />
-              <input
-                className={`${inp} w-24 flex-shrink-0 text-right`}
-                type="number" min="0" step="0.1"
-                value={row.rate}
-                onChange={e => setEirRows(eirRows.map((r, j) => j === i ? { ...r, rate: e.target.value } : r))}
-                placeholder="Rate %"
-              />
-              <button
-                onClick={() => setEirRows(eirRows.filter((_, j) => j !== i))}
-                className={`${rmBtn} flex-shrink-0`}
-                title="Remove"
-              >×</button>
-            </div>
-          ))}
-          <button
-            onClick={() => setEirRows([...eirRows, { id: uid(), name: '', balance: '', rate: '' }])}
-            className={addBtn}
-          >
-            <span className="font-bold text-base">+</span> Add Debt
-          </button>
-        </div>
-
-        {effectiveRate > 0 && (
-          <div className="mt-5 p-4 bg-accent-50 border border-accent-300 rounded-xl">
-            <div className="flex items-baseline gap-3 mb-3">
-              <span className="text-sm text-secondary-600">Effective Interest Rate</span>
-              <span className="text-3xl font-bold text-accent-700">{effectiveRate.toFixed(2)}%</span>
-            </div>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm mb-3">
-              <div className="flex justify-between border-b border-accent-200 pb-1">
-                <span className="text-secondary-500">Total Debt</span>
-                <span className="font-semibold text-secondary-700">{fmt(eirTotalBal)}</span>
-              </div>
-              <div className="flex justify-between border-b border-accent-200 pb-1">
-                <span className="text-secondary-500">Debts Entered</span>
-                <span className="font-semibold text-secondary-700">
-                  {eirRows.filter(r => nv(r.balance) > 0).length}
-                </span>
-              </div>
-            </div>
-            <p className="text-secondary-500 text-xs leading-relaxed">
-              This is the balance-weighted average of all your interest rates. Use it as a benchmark when
-              evaluating debt payoff order or consolidation offers — and watch it drop as you eliminate debt.
-            </p>
-          </div>
-        )}
       </SectionCard>
 
     </div>
