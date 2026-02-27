@@ -7,17 +7,19 @@ export default function Footer() {
     <footer className="bg-secondary-800 text-secondary-200">
       <div className="container-custom py-12">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 lg:gap-12">
-          {/* Business Location */}
+          {/* Business */}
           <div>
-            <h2 className="text-accent-400 font-bold text-lg mb-4">Location</h2>
+            <h2 className="text-accent-400 font-bold text-lg mb-4">Business</h2>
             <div className="space-y-2">
               <p className="text-secondary-300">Branch of Web Launch Academy LLC</p>
-              <Link
-                href="/contact"
+              <a
+                href="https://weblaunchacademy.com"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="text-secondary-300 hover:text-accent-400 transition-colors duration-300"
               >
-                Contact Form
-              </Link>
+                weblaunchacademy.com
+              </a>
             </div>
           </div>
 
