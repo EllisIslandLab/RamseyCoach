@@ -22,16 +22,16 @@ export default function Hero() {
               </h1>
 
               <p className="text-secondary-600 mb-8 max-w-2xl mx-auto lg:mx-0">
-                [Your introduction here - Welcome message about your financial coaching services
-                and how you help families achieve financial peace through the proven Ramsey
-                principles.]
+                Money isn&apos;t everything, but it&apos;s a window into general behavioral patterns. If
+                you&apos;re finding that your personal finances are lacking focus or just need a
+                tune-up, feel free to book a no-obligation consultation.
               </p>
 
               <p className="text-secondary-600 mb-8 max-w-2xl mx-auto lg:mx-0">
-                As a Ramsey Preferred Coach, I'm dedicated to helping you build a solid
+                As a Ramsey Preferred Coach, I&apos;m dedicated to helping you build a solid
                 financial foundation, eliminate debt, and create lasting wealth for generations
-                to come. Whether you're just starting your financial journey or looking to
-                optimize your path to financial freedom, I'm here to guide you every step of the
+                to come. Whether you&apos;re just starting your financial journey or looking to
+                optimize your path to financial freedom, I&apos;m here to guide you every step of the
                 way.
               </p>
 

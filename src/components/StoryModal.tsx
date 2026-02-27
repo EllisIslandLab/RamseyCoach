@@ -94,20 +94,15 @@ export default function StoryModal({ isOpen, onClose }: StoryModalProps) {
         {/* Modal Body */}
         <div className="prose prose-lg max-w-none">
           <p className="text-secondary-700 mb-4">
-            [Your introduction here - This is a placeholder for your personal story and journey
-            into financial coaching.]
+            I grew up in North Eastern Ohio where responsibility was a key lesson from my
+            parents. Everything they did with me and my other two brothers was carefully thought
+            out, and once we signed up for an activity, we had to follow through.
           </p>
 
           <p className="text-secondary-700 mb-4">
-            Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor
-            incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud
-            exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
-          </p>
-
-          <p className="text-secondary-700 mb-4">
-            Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu
-            fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa
-            qui officia deserunt mollit anim id est laborum.
+            I think this is a great way to live life, and it&apos;s also a great value to apply to
+            personal finances. If you&apos;re ready to get on a plan and follow through, I think
+            we&apos;ll be a perfect fit!
           </p>
 
           <h3 className="text-2xl font-bold text-primary-600 mt-8 mb-4">
@@ -115,14 +110,23 @@ export default function StoryModal({ isOpen, onClose }: StoryModalProps) {
           </h3>
 
           <p className="text-secondary-700 mb-4">
-            Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque
-            laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi
-            architecto beatae vitae dicta sunt explicabo.
+            I&apos;m not going to lie just to make my story artificially inspiring. My parents
+            supplied my brothers and I every basic need through Biblical principals. They even
+            paid our ways through college. To be fair to myself and my brothers, none of us grew
+            up to become entitled brats. We were privileged, but I think we all knew it. I showed
+            that I was grateful for everything my parents gave me by buckling down, and studying
+            hard. I even saved money by going to community college for two-and-a-half years, and
+            reduced costs to my university by applying for, and attaining the position of
+            Communications Director for Student Senate.
           </p>
 
           <p className="text-secondary-700 mb-4">
-            Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia
-            consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt.
+            The solid Biblical foundation built by the examples set by my parents has helped me
+            become the responsible husband and father I am today. It&apos;s not a rags to riches
+            inspiring story, but it&apos;s not a total screw-up, so for that I can hold my head
+            up. I also hope to pass on the examples given to me to others. I&apos;ve seen them,
+            lived them, and I now teach them. They&apos;re not hard. They&apos;re the basics. My
+            parents, I, and &mdash; yes &mdash; you can do these basics too.
           </p>
 
           <h3 className="text-2xl font-bold text-primary-600 mt-8 mb-4">
@@ -130,21 +134,25 @@ export default function StoryModal({ isOpen, onClose }: StoryModalProps) {
           </h3>
 
           <p className="text-secondary-700 mb-4">
-            Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur,
-            adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore
-            magnam aliquam quaerat voluptatem.
+            My dad taught Financial Peace University (FPU) as the Treasurer of our church. The
+            responsible money values he instilled in my brothers and I came through those
+            teachings as well. Recently he passed the Treasurer duties to me, and now I&apos;m
+            following in those footsteps. As the Treasurer, I&apos;m always available to friends
+            and family of my church for financial coaching. That service has also extended to
+            anyone outside of the church as I&apos;ve grown my practice.
           </p>
 
           <p className="text-secondary-700 mb-4">
-            Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit
-            laboriosam, nisi ut aliquid ex ea commodi consequatur? Quis autem vel eum iure
-            reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur.
+            If you&apos;ve made it through my whole biography, I&apos;d be more than happy to
+            give you a no obligation consultation for financial coaching, and to get to know you
+            as a person since you took the time for me. Thanks again, and I look forward to
+            getting to know you!
           </p>
 
           <div className="mt-8 p-6 bg-primary-50 rounded-lg border-l-4 border-primary-600">
             <p className="text-primary-800 font-semibold italic">
-              "My mission is to help you achieve financial peace and build the life you've
-              always dreamed of."
+              &quot;My mission is to help you achieve financial peace and build the life you&apos;ve
+              always dreamed of.&quot;
             </p>
           </div>
         </div>
