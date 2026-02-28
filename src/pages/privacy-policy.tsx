@@ -27,15 +27,18 @@ export default function PrivacyPolicy() {
 
               <div className="prose prose-lg max-w-none">
                 <p className="text-secondary-700 mb-6">
-                  [This is a placeholder privacy policy. Please consult with a legal professional to create a
-                  comprehensive privacy policy tailored to your business needs and compliant with applicable laws.]
+                  Your privacy matters to me. This policy explains what information I collect when you use this
+                  website or work with me as a coaching client, and how that information is handled. I keep things
+                  simple and straightforward — just like a good budget.
                 </p>
 
                 <h2 className="text-2xl font-bold text-primary-700 mt-8 mb-4">1. Introduction</h2>
                 <p className="text-secondary-700 mb-4">
-                  This Privacy Policy describes how I collect, use, and protect your personal information when you
-                  visit my website and use my services. Your privacy is important to me, and I am committed to
-                  protecting your personal information.
+                  Money-Willo is an independent financial coaching practice operated as a branch of Web Launch
+                  Academy LLC. This Privacy Policy describes how I collect, use, and protect your personal
+                  information when you visit this website or engage my coaching services. I am committed to
+                  handling your information with the same care and intentionality I encourage in every area of
+                  personal finance.
                 </p>
 
                 <h2 className="text-2xl font-bold text-primary-700 mt-8 mb-4">2. Information I Collect</h2>
@@ -117,21 +120,11 @@ export default function PrivacyPolicy() {
                 </p>
                 <div className="bg-primary-50 p-6 rounded-lg">
                   <p className="text-secondary-700">
-                    <strong>Email:</strong> [coach@example.com]
+                    The best way to reach me is through the contact form on this website. I respond to all
+                    inquiries within 24–48 business hours.
                   </p>
-                  <p className="text-secondary-700 mt-2">
-                    <strong>Phone:</strong> [(555) 555-1234]
-                  </p>
-                  <p className="text-secondary-700 mt-2">
-                    <strong>Address:</strong> [Your Business Address]
-                  </p>
-                </div>
-
-                <div className="mt-8 p-6 bg-accent-50 border-l-4 border-accent-500 rounded">
-                  <p className="text-sm text-secondary-700 italic">
-                    <strong>Important:</strong> This is a template privacy policy and should be reviewed and
-                    customized by a legal professional to ensure compliance with applicable laws and regulations,
-                    including GDPR, CCPA, and other privacy laws that may apply to your business.
+                  <p className="text-secondary-700 mt-3">
+                    <strong>Business:</strong> Money-Willo, a branch of Web Launch Academy LLC
                   </p>
                 </div>
               </div>
