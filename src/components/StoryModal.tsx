@@ -95,14 +95,16 @@ export default function StoryModal({ isOpen, onClose }: StoryModalProps) {
         <div className="prose prose-lg max-w-none">
           <p className="text-secondary-700 mb-4">
             I grew up in North Eastern Ohio where responsibility was a key lesson from my
-            parents. Everything they did with me and my other two brothers was carefully thought
-            out, and once we signed up for an activity, we had to follow through.
+            parents.
           </p>
 
           <p className="text-secondary-700 mb-4">
-            I think this is a great way to live life, and it&apos;s also a great value to apply to
-            personal finances. If you&apos;re ready to get on a plan and follow through, I think
-            we&apos;ll be a perfect fit!
+            Everything they did with me and my other two brothers was carefully thought out. If
+            there was an activity we were compelled to do, once we signed up for it, we were
+            heavily encouraged to follow through even if we didn&apos;t like it while in the thick
+            of things. I think this is a great way to live life, and it&apos;s also a great value
+            to apply to personal finances. If you&apos;re ready to get on a plan and follow
+            through, I think we&apos;ll be a perfect fit!
           </p>
 
           <h3 className="text-2xl font-bold text-primary-600 mt-8 mb-4">
