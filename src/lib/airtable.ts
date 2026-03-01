@@ -57,6 +57,7 @@ export type EmploymentStatus = 'Employed Full-time' | 'Employed Part-time' | 'Se
 export type ReasonForVisit = 'Create/Review Budget' | 'Debt Management' | 'General Financial Planning' | 'Emergency Fund/Savings' | 'Investing & Wealth Building' | 'Business/Self-employed' | 'Other';
 export type DebtType = 'Credit Cards' | 'Student Loans' | 'Mortgage' | 'Car Loan' | 'Medical' | 'Personal Loan' | 'Other';
 export type PreferredContactMethod = 'Email' | 'Phone' | 'Text';
+export type MeetingLocation = 'Virtual' | 'Willo-Hill Church';
 
 export interface ClientFormData {
   // Contact info
@@ -75,6 +76,9 @@ export interface ClientFormData {
   reasonForVisit: ReasonForVisit;
   primaryFinancialConcern?: string;
   currentDebtType?: DebtType[];
+
+  // Meeting preference
+  meetingLocation?: MeetingLocation;
 
   // Communication preferences
   preferredContactMethod?: PreferredContactMethod;
@@ -385,6 +389,7 @@ export async function createClient(
     if (clientData.currentDebtType && clientData.currentDebtType.length > 0) {
       fields.CurrentDebtType = clientData.currentDebtType;
     }
+    if (clientData.meetingLocation) fields.MeetingLocation = clientData.meetingLocation;
     if (clientData.preferredContactMethod) fields.PreferredContactMethod = clientData.preferredContactMethod;
     if (clientData.bestTimeToContact) fields.BestTimeToContact = clientData.bestTimeToContact;
 

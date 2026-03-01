@@ -13,6 +13,7 @@ import {
   ReasonForVisit,
   DebtType,
   PreferredContactMethod,
+  MeetingLocation,
 } from '@/lib/airtable';
 import {
   detectUserTimezone,
@@ -67,6 +68,7 @@ export default function BookingModal({ isOpen, onClose }: BookingModalProps) {
   const [reasonForVisit, setReasonForVisit] = useState<ReasonForVisit | ''>('');
   const [primaryFinancialConcern, setPrimaryFinancialConcern] = useState('');
   const [currentDebtType, setCurrentDebtType] = useState<DebtType[]>([]);
+  const [meetingLocation, setMeetingLocation] = useState<MeetingLocation | ''>('');
   const [preferredContactMethod, setPreferredContactMethod] = useState<PreferredContactMethod | ''>('');
   const [bestTimeToContact, setBestTimeToContact] = useState('');
   const [consent, setConsent] = useState(false);
@@ -153,6 +155,7 @@ export default function BookingModal({ isOpen, onClose }: BookingModalProps) {
         setReasonForVisit('');
         setPrimaryFinancialConcern('');
         setCurrentDebtType([]);
+        setMeetingLocation('');
         setPreferredContactMethod('');
         setBestTimeToContact('');
         setConsent(false);
@@ -356,6 +359,7 @@ export default function BookingModal({ isOpen, onClose }: BookingModalProps) {
         reasonForVisit: reasonForVisit,
         primaryFinancialConcern: primaryFinancialConcern.trim() || undefined,
         currentDebtType: currentDebtType.length > 0 ? currentDebtType : undefined,
+        meetingLocation: meetingLocation || undefined,
         preferredContactMethod: preferredContactMethod || undefined,
         bestTimeToContact: bestTimeToContact.trim() || undefined,
         consent: consent,
@@ -926,6 +930,30 @@ export default function BookingModal({ isOpen, onClose }: BookingModalProps) {
                       </label>
                     ))}
                   </div>
+                </div>
+              </div>
+
+              {/* Meeting Location */}
+              <div className="space-y-4">
+                <h3 className="font-semibold text-secondary-800 border-b pb-2">Meeting Preference</h3>
+
+                <div>
+                  <label htmlFor="meetingLocation" className="block text-sm font-medium text-secondary-700 mb-1">
+                    Where would you like to meet?
+                  </label>
+                  <select
+                    id="meetingLocation"
+                    value={meetingLocation}
+                    onChange={(e) => setMeetingLocation(e.target.value as MeetingLocation | '')}
+                    className="input"
+                  >
+                    <option value="">Select...</option>
+                    <option value="Virtual">Virtual</option>
+                    <option value="Willo-Hill Church">Willo-Hill Church</option>
+                  </select>
+                  <p className="text-xs text-secondary-500 mt-2 italic">
+                    Note: My policy is that I do not meet with females in person alone.
+                  </p>
                 </div>
               </div>
 
