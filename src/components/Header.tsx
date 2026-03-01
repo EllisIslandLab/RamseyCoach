@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 
 export default function Header() {
@@ -75,24 +76,13 @@ export default function Header() {
           <div className="flex items-center justify-between h-16 md:h-20">
             {/* Logo/Brand */}
             <Link href="/" className="flex items-center space-x-3 group">
-              {/* Icon/Logo placeholder */}
-              <div className="w-10 h-10 md:w-12 md:h-12 bg-accent-500 rounded-full flex items-center justify-center group-hover:bg-accent-600 transition-colors duration-300">
-                <svg
-                  className="w-6 h-6 md:w-7 md:h-7 text-secondary-900"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  {/* Growth/Tree icon representing coaching */}
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
-                  />
-                </svg>
-              </div>
+              <Image
+                src="/favicon.png"
+                alt="Money-Willo logo"
+                width={48}
+                height={48}
+                className="w-10 h-10 md:w-12 md:h-12 rounded-full"
+              />
 
               {/* Banner text */}
               <span className="text-white font-bold text-lg md:text-xl">
