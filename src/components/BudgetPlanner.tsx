@@ -6,7 +6,7 @@ import StatementImporter, { AppliedItem } from './StatementImporter';
 interface NVRow   { id: string; name: string; value: string; }
 interface AmtRow  { id: string; name: string; amount: string; }
 interface SinkRow { id: string; name: string; amount: string; freq: FreqVal; }
-type FreqVal = 'monthly' | 'every2' | 'quarterly' | 'twice' | 'yearly';
+type FreqVal = 'weekly' | 'biweekly' | 'monthly' | 'every2' | 'quarterly' | 'every4' | 'twice' | 'yearly';
 
 /* ─── Module-level helpers ─────────────────────────────────────────────────── */
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -15,11 +15,14 @@ const fmt = (v: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v);
 
 const FREQS: { val: FreqVal; label: string; div: number }[] = [
-  { val: 'monthly',   label: 'Monthly',        div: 1  },
-  { val: 'every2',    label: 'Every 2 Months',  div: 2  },
-  { val: 'quarterly', label: 'Quarterly',       div: 3  },
-  { val: 'twice',     label: 'Twice a Year',    div: 6  },
-  { val: 'yearly',    label: 'Yearly',          div: 12 },
+  { val: 'weekly',    label: 'Weekly',          div: 12 / 52 }, // × 52/12 → monthly
+  { val: 'biweekly',  label: 'Bi-Weekly',       div: 12 / 26 }, // × 26/12 → monthly
+  { val: 'monthly',   label: 'Monthly',          div: 1       },
+  { val: 'every2',    label: 'Every 2 Months',   div: 2       },
+  { val: 'quarterly', label: 'Quarterly',        div: 3       },
+  { val: 'every4',    label: 'Every 4 Months',   div: 4       },
+  { val: 'twice',     label: 'Twice a Year',     div: 6       },
+  { val: 'yearly',    label: 'Yearly',           div: 12      },
 ];
 const fdiv = (f: FreqVal) => FREQS.find(o => o.val === f)!.div;
 
