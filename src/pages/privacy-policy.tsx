@@ -12,6 +12,8 @@ export default function PrivacyPolicy() {
           content="Read my privacy policy to understand how I collect, use, and protect your personal information."
         />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link rel="icon" href="/favicon.png" type="image/png" sizes="48x48" />
+        <link rel="apple-touch-icon" href="/favicon.png" sizes="180x180" />
       </Head>
 
       <div className="min-h-screen flex flex-col">
