@@ -114,7 +114,7 @@ export default function Footer() {
                 />
               </svg>
               <span className="text-secondary-400 text-sm font-medium">
-                Financial Coach &amp; Treasurer of Willo-Hill Church
+                Financial Coach &amp; Treasurer of <a href="https://willohill.com/" target="_blank" rel="noopener noreferrer" className="hover:text-accent-400 underline">Willo-Hill Church</a>
               </span>
             </div>
           </div>
