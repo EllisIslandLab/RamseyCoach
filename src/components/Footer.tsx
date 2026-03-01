@@ -27,12 +27,6 @@ export default function Footer() {
           <div>
             <h2 className="text-accent-400 font-bold text-lg mb-4">Contact</h2>
             <div className="space-y-3">
-              <Link
-                href="/contact"
-                className="text-secondary-300 hover:text-accent-400 transition-colors duration-300"
-              >
-                Contact Form
-              </Link>
               <p className="text-secondary-300 text-sm leading-relaxed">
                 Submit a contact form and I&apos;ll get back to you within 24–48 hours.
               </p>
@@ -47,7 +41,7 @@ export default function Footer() {
                 href="/contact"
                 className="block text-secondary-300 hover:text-accent-400 transition-colors duration-300"
               >
-                Contact Us
+                Contact Form
               </Link>
               <Link
                 href="/privacy-policy"
