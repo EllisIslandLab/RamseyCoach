@@ -17,7 +17,6 @@ export default function Testimonials() {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [hasLoadedFromAirtable, setHasLoadedFromAirtable] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   // Ref for Intersection Observer
   const sectionRef = useRef<HTMLElement>(null);
@@ -27,14 +26,12 @@ export default function Testimonials() {
     if (hasLoadedFromAirtable || isLoading) return;
 
     setIsLoading(true);
-    setError(null);
 
     try {
       const response = await fetch('/api/testimonials?limit=10&offset=0');
       if (!response.ok) {
         // Retry up to 2 times on failure
         if (retryCount < 2) {
-          setIsLoading(false);
           setTimeout(() => loadTestimonialsFromAirtable(retryCount + 1), 1000);
           return;
         }
@@ -54,7 +51,6 @@ export default function Testimonials() {
     } catch (err) {
       // Retry up to 2 times on error
       if (retryCount < 2) {
-        setIsLoading(false);
         setTimeout(() => loadTestimonialsFromAirtable(retryCount + 1), 1000);
         return;
       }
@@ -258,19 +254,6 @@ export default function Testimonials() {
               </div>
             </div>
 
-            {/* Loading Indicator */}
-            {isLoading && (
-              <div className="mt-6 text-center">
-                <p className="text-sm text-secondary-500">Loading more testimonials...</p>
-              </div>
-            )}
-
-            {/* Error Message */}
-            {error && (
-              <div className="mt-6 text-center">
-                <p className="text-sm text-red-600">{error}</p>
-              </div>
-            )}
           </div>
 
           {/* Pagination Dots */}
