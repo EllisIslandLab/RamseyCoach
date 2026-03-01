@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
@@ -44,6 +44,16 @@ type EIRRow = { id: string; name: string; balance: string; rate: string };
 const eirUid = () => Math.random().toString(36).slice(2, 9);
 const eirNv  = (s: string) => parseFloat(s) || 0;
 
+// ─── localStorage persistence ─────────────────────────────────────────────────
+
+const CALC_LS_KEY = 'ramseycoach_calcs';
+
+const getSaved = (): Record<string, unknown> => {
+  if (typeof window === 'undefined') return {};
+  try { return JSON.parse(localStorage.getItem(CALC_LS_KEY) || '{}'); }
+  catch { return {}; }
+};
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ToolsPage() {
@@ -54,10 +64,10 @@ export default function ToolsPage() {
     setOpenCalc((prev) => (prev === id ? null : id));
 
   // ── 1. Mortgage ─────────────────────────────────────────────────────────────
-  const [m_price, setMPrice] = useState('300000');
-  const [m_down, setMDown] = useState('60000');
-  const [m_term, setMTerm] = useState('30');
-  const [m_rate, setMRate] = useState('6.5');
+  const [m_price, setMPrice] = useState(() => (getSaved().m_price as string) ?? '300000');
+  const [m_down, setMDown] = useState(() => (getSaved().m_down as string) ?? '60000');
+  const [m_term, setMTerm] = useState(() => (getSaved().m_term as string) ?? '30');
+  const [m_rate, setMRate] = useState(() => (getSaved().m_rate as string) ?? '6.5');
   const [m_res, setMRes] = useState<{
     monthly: number;
     loanAmt: number;
@@ -83,10 +93,10 @@ export default function ToolsPage() {
   };
 
   // ── 2. Mortgage Payoff ──────────────────────────────────────────────────────
-  const [po_bal, setPobal] = useState('250000');
-  const [po_rate, setPoRate] = useState('6.5');
-  const [po_pmt, setPoPmt] = useState('1580');
-  const [po_extra, setPoExtra] = useState('200');
+  const [po_bal, setPobal] = useState(() => (getSaved().po_bal as string) ?? '250000');
+  const [po_rate, setPoRate] = useState(() => (getSaved().po_rate as string) ?? '6.5');
+  const [po_pmt, setPoPmt] = useState(() => (getSaved().po_pmt as string) ?? '1580');
+  const [po_extra, setPoExtra] = useState(() => (getSaved().po_extra as string) ?? '200');
   const [po_res, setPoRes] = useState<{
     origMonths: number;
     newMonths: number;
@@ -131,10 +141,10 @@ export default function ToolsPage() {
   };
 
   // ── 3. Loan / Debt Payoff ───────────────────────────────────────────────────
-  const [l_amt, setLAmt] = useState('25000');
-  const [l_rate, setLRate] = useState('7.0');
-  const [l_term, setLTerm] = useState('60');
-  const [l_extra, setLExtra] = useState('0');
+  const [l_amt, setLAmt] = useState(() => (getSaved().l_amt as string) ?? '25000');
+  const [l_rate, setLRate] = useState(() => (getSaved().l_rate as string) ?? '7.0');
+  const [l_term, setLTerm] = useState(() => (getSaved().l_term as string) ?? '60');
+  const [l_extra, setLExtra] = useState(() => (getSaved().l_extra as string) ?? '0');
   const [l_res, setLRes] = useState<{
     monthly: number;
     totalInterest: number;
@@ -184,10 +194,10 @@ export default function ToolsPage() {
   };
 
   // ── 4. Compound Interest ────────────────────────────────────────────────────
-  const [ci_principal, setCiPrincipal] = useState('10000');
-  const [ci_monthly, setCiMonthly] = useState('500');
-  const [ci_rate, setCiRate] = useState('8.0');
-  const [ci_years, setCiYears] = useState('20');
+  const [ci_principal, setCiPrincipal] = useState(() => (getSaved().ci_principal as string) ?? '10000');
+  const [ci_monthly, setCiMonthly] = useState(() => (getSaved().ci_monthly as string) ?? '500');
+  const [ci_rate, setCiRate] = useState(() => (getSaved().ci_rate as string) ?? '8.0');
+  const [ci_years, setCiYears] = useState(() => (getSaved().ci_years as string) ?? '20');
   const [ci_res, setCiRes] = useState<{
     finalBalance: number;
     totalContrib: number;
@@ -227,21 +237,26 @@ export default function ToolsPage() {
   };
 
   // ── 5. Effective Interest Rate ──────────────────────────────────────────────
-  const [eir_rows, setEirRows] = useState<EIRRow[]>([
-    { id: 'e1', name: 'Mortgage',  balance: '', rate: '' },
-    { id: 'e2', name: 'Car Loan',  balance: '', rate: '' },
-  ]);
+  const [eir_rows, setEirRows] = useState<EIRRow[]>(() => {
+    const s = getSaved().eir_rows;
+    return Array.isArray(s) && s.length > 0
+      ? (s as EIRRow[])
+      : [
+          { id: 'e1', name: 'Mortgage', balance: '', rate: '' },
+          { id: 'e2', name: 'Car Loan', balance: '', rate: '' },
+        ];
+  });
   const eir_totalBal = eir_rows.reduce((s, r) => s + eirNv(r.balance), 0);
   const eir_weighted = eir_rows.reduce((s, r) => s + eirNv(r.balance) * eirNv(r.rate), 0);
   const eir_rate     = eir_totalBal > 0 ? eir_weighted / eir_totalBal : 0;
 
   // ── 6. 401K / Retirement ────────────────────────────────────────────────────
-  const [ret_currAge, setRetCurrAge] = useState('35');
-  const [ret_retireAge, setRetRetireAge] = useState('65');
-  const [ret_bal, setRetBal] = useState('50000');
-  const [ret_monthly, setRetMonthly] = useState('500');
-  const [ret_match, setRetMatch] = useState('50');
-  const [ret_return, setRetReturn] = useState('7.0');
+  const [ret_currAge, setRetCurrAge] = useState(() => (getSaved().ret_currAge as string) ?? '35');
+  const [ret_retireAge, setRetRetireAge] = useState(() => (getSaved().ret_retireAge as string) ?? '65');
+  const [ret_bal, setRetBal] = useState(() => (getSaved().ret_bal as string) ?? '50000');
+  const [ret_monthly, setRetMonthly] = useState(() => (getSaved().ret_monthly as string) ?? '500');
+  const [ret_match, setRetMatch] = useState(() => (getSaved().ret_match as string) ?? '50');
+  const [ret_return, setRetReturn] = useState(() => (getSaved().ret_return as string) ?? '7.0');
   const [ret_res, setRetRes] = useState<{
     projected: number;
     totalContrib: number;
@@ -291,6 +306,25 @@ export default function ToolsPage() {
 
     setRetRes({ projected: balance, totalContrib, totalGrowth: balance - totalContrib, table });
   };
+
+  // ── Persist all calculator inputs to localStorage ────────────────────────────
+  useEffect(() => {
+    localStorage.setItem(CALC_LS_KEY, JSON.stringify({
+      m_price, m_down, m_term, m_rate,
+      po_bal, po_rate, po_pmt, po_extra,
+      l_amt, l_rate, l_term, l_extra,
+      ci_principal, ci_monthly, ci_rate, ci_years,
+      ret_currAge, ret_retireAge, ret_bal, ret_monthly, ret_match, ret_return,
+      eir_rows,
+    }));
+  }, [
+    m_price, m_down, m_term, m_rate,
+    po_bal, po_rate, po_pmt, po_extra,
+    l_amt, l_rate, l_term, l_extra,
+    ci_principal, ci_monthly, ci_rate, ci_years,
+    ret_currAge, ret_retireAge, ret_bal, ret_monthly, ret_match, ret_return,
+    eir_rows,
+  ]);
 
   const eir_inp = inputCls + ' text-right';
 
