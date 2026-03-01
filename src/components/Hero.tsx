@@ -1,14 +1,29 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import Image from 'next/image';
 import StoryModal from './StoryModal';
+import BookingModal from './BookingModal';
 
 export default function Hero() {
   const [isStoryModalOpen, setIsStoryModalOpen] = useState(false);
+  const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+  const [highlightBooking, setHighlightBooking] = useState(false);
+  const bookingButtonRef = useRef<HTMLButtonElement>(null);
 
   const openStoryModal = () => setIsStoryModalOpen(true);
   const closeStoryModal = () => setIsStoryModalOpen(false);
+  const openBookingModal = () => { setIsBookingModalOpen(true); setHighlightBooking(false); };
+  const closeBookingModal = () => setIsBookingModalOpen(false);
+
+  const handleBookFromStory = () => {
+    closeStoryModal();
+    setHighlightBooking(true);
+    setTimeout(() => {
+      bookingButtonRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+    setTimeout(() => setHighlightBooking(false), 3500);
+  };
 
   return (
     <>
@@ -41,9 +56,17 @@ export default function Hero() {
                   My Story
                 </button>
 
-                <a href="#booking" className="btn-accent">
+                <button
+                  ref={bookingButtonRef}
+                  onClick={openBookingModal}
+                  className={`btn-accent transition-all duration-300 ${
+                    highlightBooking
+                      ? 'ring-4 ring-offset-2 ring-accent-400 scale-110 shadow-2xl animate-pulse'
+                      : ''
+                  }`}
+                >
                   Book Free Consultation
-                </a>
+                </button>
               </div>
 
               {/* Trust Indicators */}
@@ -112,7 +135,10 @@ export default function Hero() {
       </section>
 
       {/* Story Modal */}
-      <StoryModal isOpen={isStoryModalOpen} onClose={closeStoryModal} />
+      <StoryModal isOpen={isStoryModalOpen} onClose={closeStoryModal} onBookConsultation={handleBookFromStory} />
+
+      {/* Booking Modal */}
+      <BookingModal isOpen={isBookingModalOpen} onClose={closeBookingModal} />
     </>
   );
 }

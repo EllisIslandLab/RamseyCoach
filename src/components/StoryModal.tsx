@@ -5,9 +5,10 @@ import { useEffect, useState } from 'react';
 interface StoryModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onBookConsultation: () => void;
 }
 
-export default function StoryModal({ isOpen, onClose }: StoryModalProps) {
+export default function StoryModal({ isOpen, onClose, onBookConsultation }: StoryModalProps) {
   const [isAnimating, setIsAnimating] = useState(false);
 
   useEffect(() => {
@@ -170,8 +171,8 @@ export default function StoryModal({ isOpen, onClose }: StoryModalProps) {
 
         {/* Modal Footer */}
         <div className="mt-8 flex justify-end">
-          <button onClick={onClose} className="btn-primary">
-            Close
+          <button onClick={onBookConsultation} className="btn-accent">
+            Book Free Consultation
           </button>
         </div>
       </div>
