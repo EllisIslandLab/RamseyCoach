@@ -114,21 +114,30 @@ export default function StoryModal({ isOpen, onClose }: StoryModalProps) {
           <p className="text-secondary-700 mb-4">
             I&apos;m not going to lie just to make my story artificially inspiring. My parents
             supplied my brothers and I every basic need through Biblical principals. They even
-            paid our ways through college. To be fair to myself and my brothers, none of us grew
-            up to become entitled brats. We were privileged, but I think we all knew it. I showed
-            that I was grateful for everything my parents gave me by buckling down, and studying
-            hard. I even saved money by going to community college for two-and-a-half years, and
-            reduced costs to my university by applying for, and attaining the position of
-            Communications Director for Student Senate.
+            paid our ways through college.
+          </p>
+
+          <p className="text-secondary-700 mb-4">
+            To be fair to myself and my brothers, none of us grew up to become entitled brats.
+            We were privileged, but I think we all knew it.
+          </p>
+
+          <p className="text-secondary-700 mb-4">
+            I showed that I was grateful for everything my parents gave me by buckling down, and
+            studying hard. I even saved money by going to community college for two-and-a-half
+            years, and reduced costs to my university by applying for, and attaining the position
+            of Communications Director for Student Senate.
           </p>
 
           <p className="text-secondary-700 mb-4">
             The solid Biblical foundation built by the examples set by my parents has helped me
             become the responsible husband and father I am today. It&apos;s not a rags to riches
             inspiring story, but it&apos;s not a total screw-up, so for that I can hold my head
-            up. I also hope to pass on the examples given to me to others. I&apos;ve seen them,
-            lived them, and I now teach them. They&apos;re not hard. They&apos;re the basics. My
-            parents, I, and &mdash; yes &mdash; you can do these basics too.
+            up. I also hope to pass on the examples given to me to others. I&apos;ve been taught
+            these values, I&apos;ve lived by them, and now I teach them. They&apos;re not
+            complicated; they&apos;re simple. That doesn&apos;t mean they&apos;re easy to follow.
+            In fact because of their simplicity, they&apos;re easy to lose interest in. That&apos;s
+            where having a personal financial coach can help.
           </p>
 
           <h3 className="text-2xl font-bold text-primary-600 mt-8 mb-4">
