@@ -371,8 +371,8 @@ export default function BudgetPlanner() {
     setOpen(p => ({ ...p, B: true, C: true, D: true, E: true }));
   };
 
-  /* ── Download as Excel / ODS ──────────────────────────────────────────── */
-  const handleDownload = (format: 'xlsx' | 'ods') => {
+  /* ── Build workbook (shared between download and email) ───────────────── */
+  const buildWorkbook = () => {
     const $ = (n: number) => n || 0;
     const rows: (string | number)[][] = [
       ['Money-Willo — Monthly Budget'],
@@ -423,24 +423,55 @@ export default function BudgetPlanner() {
     ws['!cols'] = [{ wch: 40 }, { wch: 16 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Monthly Budget');
-    XLSX.writeFile(wb, `monthly-budget.${format}`);
+    return wb;
   };
 
-  /* ── Email gate state (stub — wire to Resend API route when ready) ─────── */
+  /* ── Download as Excel / ODS ──────────────────────────────────────────── */
+  const handleDownload = (format: 'xlsx' | 'ods') => {
+    XLSX.writeFile(buildWorkbook(), `monthly-budget.${format}`);
+  };
+
+  /* ── Email gate state ─────────────────────────────────────────────────── */
   const [emailGate, setEmailGate] = useState('');
   const [showEmailGate, setShowEmailGate] = useState(false);
   const [pendingFormat, setPendingFormat] = useState<'xlsx' | 'ods'>('xlsx');
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
+  const [emailError, setEmailError] = useState('');
 
   const startDownload = (format: 'xlsx' | 'ods') => {
     setPendingFormat(format);
+    setEmailSent(false);
+    setEmailError('');
     setShowEmailGate(true);
   };
 
-  const confirmDownload = () => {
-    // TODO: if emailGate is set, POST to /api/budget-email with { email: emailGate, format: pendingFormat }
-    // using Resend to send the file — hook in when ready
+  const confirmDownload = async () => {
+    // Always trigger the local file download immediately
     handleDownload(pendingFormat);
-    setShowEmailGate(false);
+
+    // If an email was provided, also send via Resend
+    if (emailGate.trim()) {
+      setEmailSending(true);
+      setEmailError('');
+      try {
+        const fileBase64 = XLSX.write(buildWorkbook(), { bookType: pendingFormat, type: 'base64' });
+        const res = await fetch('/api/budget-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: emailGate.trim(), format: pendingFormat, fileBase64 }),
+        });
+        if (!res.ok) throw new Error('Send failed');
+        setEmailSent(true);
+        setTimeout(() => setShowEmailGate(false), 2000);
+      } catch {
+        setEmailError('Could not send email. Your file was still downloaded.');
+      } finally {
+        setEmailSending(false);
+      }
+    } else {
+      setShowEmailGate(false);
+    }
   };
 
   /* ── Import section open/closed ───────────────────────────────────────── */
@@ -516,23 +547,32 @@ export default function BudgetPlanner() {
               type="email"
               placeholder="your@email.com (optional)"
               value={emailGate}
-              onChange={e => setEmailGate(e.target.value)}
+              onChange={e => { setEmailGate(e.target.value); setEmailSent(false); setEmailError(''); }}
+              disabled={emailSending}
             />
-            <p className="text-secondary-400 text-xs mb-4">
-              Email delivery coming soon — your download will start immediately.
-            </p>
+            {emailSent ? (
+              <p className="text-primary-600 text-xs mb-4 font-semibold">Email sent! Check your inbox.</p>
+            ) : emailError ? (
+              <p className="text-red-500 text-xs mb-4">{emailError}</p>
+            ) : (
+              <p className="text-secondary-400 text-xs mb-4">
+                Enter your email to also receive a copy — your download starts immediately either way.
+              </p>
+            )}
             <div className="flex gap-2 justify-end">
               <button
                 onClick={() => setShowEmailGate(false)}
                 className="px-4 py-2 text-xs text-secondary-500 hover:text-secondary-700 font-semibold transition-colors"
+                disabled={emailSending}
               >
                 Cancel
               </button>
               <button
                 onClick={confirmDownload}
-                className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-lg transition-colors"
+                disabled={emailSending}
+                className="px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-60 text-white text-xs font-semibold rounded-lg transition-colors"
               >
-                Download
+                {emailSending ? 'Sending…' : 'Download'}
               </button>
             </div>
           </div>
