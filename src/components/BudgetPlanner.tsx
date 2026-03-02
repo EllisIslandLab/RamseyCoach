@@ -482,7 +482,7 @@ export default function BudgetPlanner() {
     <div className="container-custom py-8 max-w-3xl mx-auto">
 
       {/* Action Bar */}
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+      <div data-noprint className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <div>
           <h2 className="text-xl font-bold text-secondary-800">Interactive Budget Planner</h2>
           <p className="text-secondary-400 text-xs mt-0.5">
@@ -536,7 +536,7 @@ export default function BudgetPlanner() {
 
       {/* Email gate modal */}
       {showEmailGate && (
-        <div className="fixed inset-0 bg-secondary-900 bg-opacity-40 z-50 flex items-center justify-center p-4">
+        <div data-noprint className="fixed inset-0 bg-secondary-900 bg-opacity-40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6">
             <h3 className="font-bold text-secondary-800 mb-1">Download Budget Spreadsheet</h3>
             <p className="text-secondary-500 text-xs mb-4 leading-relaxed">
@@ -580,7 +580,7 @@ export default function BudgetPlanner() {
       )}
 
       {/* ── Import from Bank Statements ───────────────────────────────────── */}
-      <div className="bg-white rounded-xl shadow-sm border border-secondary-200 overflow-hidden mb-4">
+      <div data-noprint className="bg-white rounded-xl shadow-sm border border-secondary-200 overflow-hidden mb-4">
         <button
           onClick={() => setImportOpen(p => !p)}
           className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-secondary-50 transition-colors focus:outline-none"

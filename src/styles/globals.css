@@ -208,6 +208,116 @@
   }
 }
 
+/* ── Print styles ───────────────────────────────────────────────────────── */
+@media print {
+  /* Hide everything that isn't the budget planner */
+  header, footer, nav,
+  [data-noprint],
+  .btn, button:not(.budget-print-keep) {
+    display: none !important;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+    font-family: Georgia, serif;
+    font-size: 11pt;
+  }
+
+  /* Let the budget fill the page */
+  .container-custom {
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Force all sections open (JS does this before print, but belt-and-suspenders) */
+  [class*="hidden"] {
+    display: block !important;
+  }
+
+  /* Section cards: remove rounded corners, shadows, borders → plain box */
+  .bg-white.rounded-xl,
+  .bg-white.rounded-lg {
+    border: 1px solid #ccc !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    margin-bottom: 12pt !important;
+    break-inside: avoid;
+  }
+
+  /* Section headers: plain underline instead of toggle buttons */
+  .bg-white.rounded-xl > button,
+  .bg-white.rounded-lg > button {
+    display: flex !important;
+    pointer-events: none;
+    background: #f5f5f5 !important;
+    padding: 6pt 8pt !important;
+    border-bottom: 1px solid #ccc !important;
+  }
+
+  /* Remove colored circle badges */
+  .bg-primary-600.rounded-full,
+  .bg-accent-500.rounded-full {
+    background: #555 !important;
+    color: white !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Inputs: show value as plain text */
+  input {
+    border: none !important;
+    border-bottom: 1px solid #aaa !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    padding: 2pt 0 !important;
+    font-size: 10pt;
+  }
+
+  select {
+    border: none !important;
+    border-bottom: 1px solid #aaa !important;
+    background: transparent !important;
+    font-size: 10pt;
+  }
+
+  /* Totals and summaries: keep green text readable */
+  .text-primary-700 {
+    color: #166534 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .text-red-600 { color: #dc2626 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  /* Net worth highlight box */
+  .bg-primary-50 { background: #f0fdf4 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .bg-red-50    { background: #fef2f2 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  /* Remove remove (×) buttons */
+  [title="Remove"] { display: none !important; }
+
+  /* Add a title at the top */
+  .container-custom::before {
+    content: "Money-Willo — Monthly Budget";
+    display: block;
+    font-size: 18pt;
+    font-weight: bold;
+    margin-bottom: 16pt;
+    border-bottom: 2pt solid #166534;
+    padding-bottom: 6pt;
+    color: #166534;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Page breaks */
+  @page {
+    margin: 0.75in;
+    size: letter portrait;
+  }
+}
+
 /* Animation keyframes */
 @keyframes fadeIn {
   from {
