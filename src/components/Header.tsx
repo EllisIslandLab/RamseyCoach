@@ -4,11 +4,13 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const pathname = usePathname();
+  const { user, openAuthModal, signOut } = useAuth();
 
   // Handle scroll effect for header shadow
   useEffect(() => {
@@ -103,6 +105,28 @@ export default function Header() {
               ))}
             </nav>
 
+            {/* Auth button — desktop */}
+            <div className="hidden md:flex items-center ml-2">
+              {user ? (
+                <div className="flex items-center gap-3">
+                  <span className="text-primary-200 text-sm truncate max-w-[160px]">{user.email}</span>
+                  <button
+                    onClick={signOut}
+                    className="text-white border border-primary-400 hover:border-accent-400 hover:text-accent-400 text-sm font-medium px-3 py-1.5 rounded-lg transition-colors duration-300"
+                  >
+                    Sign Out
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={openAuthModal}
+                  className="text-white border border-primary-400 hover:border-accent-400 hover:text-accent-400 text-sm font-medium px-3 py-1.5 rounded-lg transition-colors duration-300"
+                >
+                  Sign In
+                </button>
+              )}
+            </div>
+
             {/* Hamburger Menu Button (Mobile) */}
             <button
               onClick={toggleMenu}
@@ -167,11 +191,26 @@ export default function Header() {
             ))}
           </nav>
 
-          {/* Additional mobile menu content */}
-          <div className="mt-auto pb-8">
-            <p className="text-primary-200 text-sm">
-              Take control of your finances today
-            </p>
+          {/* Auth — mobile */}
+          <div className="mt-auto pb-8 border-t border-primary-600 pt-6">
+            {user ? (
+              <>
+                <p className="text-primary-200 text-xs mb-3 truncate">{user.email}</p>
+                <button
+                  onClick={() => { signOut(); closeMenu(); }}
+                  className="text-white border border-primary-400 hover:border-accent-400 hover:text-accent-400 text-sm font-medium px-4 py-2 rounded-lg transition-colors duration-300 w-full text-left"
+                >
+                  Sign Out
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => { openAuthModal(); closeMenu(); }}
+                className="text-white border border-primary-400 hover:border-accent-400 hover:text-accent-400 text-sm font-medium px-4 py-2 rounded-lg transition-colors duration-300 w-full text-left"
+              >
+                Sign In / Create Account
+              </button>
+            )}
           </div>
         </div>
       </div>

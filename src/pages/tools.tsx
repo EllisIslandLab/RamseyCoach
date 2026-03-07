@@ -3,6 +3,8 @@ import Head from 'next/head';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import BudgetPlanner from '@/components/BudgetPlanner';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -57,6 +59,9 @@ const getSaved = (): Record<string, unknown> => {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ToolsPage() {
+  const { user, openAuthModal } = useAuth();
+  const [calcSaveStatus, setCalcSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
   const [activeTab, setActiveTab] = useState<'calculators' | 'budget'>('calculators');
   const [openCalc, setOpenCalc] = useState<CalcId | null>('mortgage');
 
@@ -325,6 +330,63 @@ export default function ToolsPage() {
     ret_currAge, ret_retireAge, ret_bal, ret_monthly, ret_match, ret_return,
     eir_rows,
   ]);
+
+  // ── Load calculator data from Supabase when user signs in ────────────────────
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('user_tool_data')
+      .select('calculator_data')
+      .eq('user_id', user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!data?.calculator_data) return;
+        const c = data.calculator_data as Record<string, unknown>;
+        if (c.m_price)      setMPrice(c.m_price as string);
+        if (c.m_down)       setMDown(c.m_down as string);
+        if (c.m_term)       setMTerm(c.m_term as string);
+        if (c.m_rate)       setMRate(c.m_rate as string);
+        if (c.po_bal)       setPobal(c.po_bal as string);
+        if (c.po_rate)      setPoRate(c.po_rate as string);
+        if (c.po_pmt)       setPoPmt(c.po_pmt as string);
+        if (c.po_extra)     setPoExtra(c.po_extra as string);
+        if (c.l_amt)        setLAmt(c.l_amt as string);
+        if (c.l_rate)       setLRate(c.l_rate as string);
+        if (c.l_term)       setLTerm(c.l_term as string);
+        if (c.l_extra)      setLExtra(c.l_extra as string);
+        if (c.ci_principal) setCiPrincipal(c.ci_principal as string);
+        if (c.ci_monthly)   setCiMonthly(c.ci_monthly as string);
+        if (c.ci_rate)      setCiRate(c.ci_rate as string);
+        if (c.ci_years)     setCiYears(c.ci_years as string);
+        if (c.ret_currAge)  setRetCurrAge(c.ret_currAge as string);
+        if (c.ret_retireAge)setRetRetireAge(c.ret_retireAge as string);
+        if (c.ret_bal)      setRetBal(c.ret_bal as string);
+        if (c.ret_monthly)  setRetMonthly(c.ret_monthly as string);
+        if (c.ret_match)    setRetMatch(c.ret_match as string);
+        if (c.ret_return)   setRetReturn(c.ret_return as string);
+        if (Array.isArray(c.eir_rows)) setEirRows(c.eir_rows as EIRRow[]);
+      });
+  }, [user]);
+
+  // ── Save calculators to Supabase ─────────────────────────────────────────────
+  const handleSaveCalcs = async () => {
+    if (!user) { openAuthModal(); return; }
+    setCalcSaveStatus('saving');
+    const snapshot = {
+      m_price, m_down, m_term, m_rate,
+      po_bal, po_rate, po_pmt, po_extra,
+      l_amt, l_rate, l_term, l_extra,
+      ci_principal, ci_monthly, ci_rate, ci_years,
+      ret_currAge, ret_retireAge, ret_bal, ret_monthly, ret_match, ret_return,
+      eir_rows,
+    };
+    const { error } = await supabase
+      .from('user_tool_data')
+      .upsert({ user_id: user.id, calculator_data: snapshot, updated_at: new Date().toISOString() },
+               { onConflict: 'user_id' });
+    setCalcSaveStatus(error ? 'error' : 'saved');
+    setTimeout(() => setCalcSaveStatus('idle'), 3000);
+  };
 
   const eir_inp = inputCls + ' text-right';
 
@@ -748,7 +810,7 @@ export default function ToolsPage() {
               <h1 className="text-3xl md:text-4xl font-bold mb-3 text-white">Financial Tools</h1>
               <p className="text-primary-100 text-base md:text-lg max-w-2xl mx-auto leading-relaxed">
                 Free calculators and planning tools to help you take control of your money.
-                No sign-up, no gimmicks — just honest numbers.
+                Sign in to save your data permanently — or use them without an account.
               </p>
             </div>
           </section>
@@ -784,6 +846,40 @@ export default function ToolsPage() {
           {/* ── Calculators Tab ─────────────────────────────────────────────── */}
           {activeTab === 'calculators' && (
             <section className="container-custom py-10">
+              <div className="max-w-3xl mx-auto mb-4 flex justify-end">
+                <button
+                  onClick={handleSaveCalcs}
+                  disabled={calcSaveStatus === 'saving'}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 ${
+                    calcSaveStatus === 'saved'
+                      ? 'bg-green-100 border border-green-300 text-green-700'
+                      : calcSaveStatus === 'error'
+                      ? 'bg-red-100 border border-red-300 text-red-600'
+                      : 'bg-primary-600 text-white hover:bg-primary-700'
+                  }`}
+                >
+                  {calcSaveStatus === 'saved' ? (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      Saved!
+                    </>
+                  ) : calcSaveStatus === 'error' ? (
+                    'Error — try again'
+                  ) : calcSaveStatus === 'saving' ? (
+                    'Saving…'
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                      </svg>
+                      {user ? 'Save Calculator Inputs' : 'Save to Account'}
+                    </>
+                  )}
+                </button>
+              </div>
               <div className="max-w-3xl mx-auto space-y-3">
                 {calculators.map((calc) => (
                   <div

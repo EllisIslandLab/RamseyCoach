@@ -1,12 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import StatementImporter, { AppliedItem } from './StatementImporter';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 
 /* ─── Types ────────────────────────────────────────────────────────────────── */
 interface NVRow   { id: string; name: string; value: string; }
 interface AmtRow  { id: string; name: string; amount: string; }
 interface SinkRow { id: string; name: string; amount: string; freq: FreqVal; }
 type FreqVal = 'weekly' | 'biweekly' | 'monthly' | 'every2' | 'quarterly' | 'every4' | 'twice' | 'yearly';
+
+interface MonthData {
+  label: string;                    // "March 2025"
+  actuals: Record<string, string>;  // row.id → actual value entered by user
+}
 
 /* ─── Module-level helpers ─────────────────────────────────────────────────── */
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -31,6 +38,21 @@ const setAmtField = (rows: AmtRow[], i: number, k: 'name' | 'amount', v: string)
   rows.map((r, j) => (j === i ? { ...r, [k]: v } : r));
 const setNVField = (rows: NVRow[], i: number, k: 'name' | 'value', v: string): NVRow[] =>
   rows.map((r, j) => (j === i ? { ...r, [k]: v } : r));
+
+const MONTH_NAMES = [
+  'January','February','March','April','May','June',
+  'July','August','September','October','November','December',
+];
+
+function nextMonthLabel(current: string): string {
+  const parts = current.split(' ');
+  const month = parts[0];
+  const year  = parts[1];
+  const idx = MONTH_NAMES.indexOf(month);
+  return idx === 11
+    ? `January ${parseInt(year) + 1}`
+    : `${MONTH_NAMES[idx + 1]} ${year}`;
+}
 
 /* ─── Style tokens ─────────────────────────────────────────────────────────── */
 const inp     = 'border border-secondary-300 rounded-lg px-3 py-2 text-secondary-800 text-sm '
@@ -107,8 +129,10 @@ const dfSavings  = (): AmtRow[]  => [
   { id: uid(), name: 'Vacation',                  amount: '' },
   { id: uid(), name: 'Emergency Fund',            amount: '' },
 ];
+
 /* ─── localStorage persistence ─────────────────────────────────────────────── */
-const LS_KEY = 'ramseycoach_budget';
+const LS_KEY        = 'ramseycoach_budget';
+const LS_MONTHS_KEY = 'ramseycoach_budget_months';
 
 const loadSaved = (): Record<string, unknown> | null => {
   if (typeof window === 'undefined') return null;
@@ -116,6 +140,14 @@ const loadSaved = (): Record<string, unknown> | null => {
     const s = localStorage.getItem(LS_KEY);
     return s ? (JSON.parse(s) as Record<string, unknown>) : null;
   } catch { return null; }
+};
+
+const loadMonths = (): MonthData[] => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const s = localStorage.getItem(LS_MONTHS_KEY);
+    return s ? (JSON.parse(s) as MonthData[]) : [];
+  } catch { return []; }
 };
 
 /* ══════════════════════════════════════════════════════════════════════════════
@@ -260,10 +292,333 @@ function NVRowList({ rows, setRows, addLabel }: {
   );
 }
 
+/* ─── StartMonthModal ───────────────────────────────────────────────────────── */
+function StartMonthModal({ onConfirm, onCancel }: { onConfirm: (label: string) => void; onCancel: () => void }) {
+  const [value, setValue] = useState('');
+
+  const handleConfirm = () => {
+    if (!value) return;
+    const [year, month] = value.split('-');
+    const label = `${MONTH_NAMES[parseInt(month) - 1]} ${year}`;
+    onConfirm(label);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-secondary-900 bg-opacity-40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6">
+        <h3 className="font-bold text-secondary-800 mb-1">Start Month Tracking</h3>
+        <p className="text-secondary-500 text-xs mb-4 leading-relaxed">
+          Choose the first month to track actuals against your budget.
+        </p>
+        <input
+          type="month"
+          className="w-full border border-secondary-300 rounded-lg px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-primary-500"
+          value={value}
+          onChange={e => setValue(e.target.value)}
+        />
+        <div className="flex gap-2 justify-end">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 text-xs text-secondary-500 hover:text-secondary-700 font-semibold transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={!value}
+            className="px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-60 text-white text-xs font-semibold rounded-lg transition-colors"
+          >
+            Start Tracking
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── ComparisonSection (helper for MonthComparisonView) ───────────────────── */
+interface CompRow { id: string; name: string; budget: number; }
+interface ComparisonSectionProps {
+  title: string;
+  rows: CompRow[];
+  actuals: Record<string, string>;
+  onActualChange: (id: string, value: string) => void;
+}
+
+function ComparisonSection({ title, rows, actuals, onActualChange }: ComparisonSectionProps) {
+  const [open, setOpen] = useState(true);
+  const totalBudget = rows.reduce((s, r) => s + r.budget, 0);
+  const totalActual = rows.reduce((s, r) => s + (parseFloat(actuals[r.id]) || 0), 0);
+  const hasActuals  = rows.some(r => actuals[r.id]);
+  const totalDiff   = totalActual - totalBudget;
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-secondary-200 overflow-hidden mb-3">
+      <button
+        onClick={() => setOpen(p => !p)}
+        className="w-full flex items-center justify-between px-5 py-3 text-left hover:bg-secondary-50 transition-colors focus:outline-none"
+      >
+        <span className="font-bold text-secondary-800 text-sm">{title}</span>
+        <div className="flex items-center gap-3 ml-4 flex-shrink-0">
+          <span className="text-xs text-secondary-400 hidden sm:block">
+            Budget: {fmt(totalBudget)}
+            {hasActuals && ` | Actual: ${fmt(totalActual)}`}
+          </span>
+          {hasActuals && (
+            <span className={`text-sm font-bold ${totalDiff > 0 ? 'text-red-500' : totalDiff < 0 ? 'text-primary-600' : 'text-secondary-400'}`}>
+              {totalDiff > 0 ? '+' : ''}{fmt(totalDiff)}
+            </span>
+          )}
+          <svg
+            className={`w-4 h-4 text-secondary-400 transform transition-transform ${open ? 'rotate-180' : ''}`}
+            fill="none" stroke="currentColor" viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+      </button>
+
+      {open && (
+        <div className="border-t border-secondary-100">
+          {/* Column header */}
+          <div className="flex items-center px-5 py-2 gap-3 bg-secondary-50 border-b border-secondary-100">
+            <span className="flex-1 text-xs font-bold uppercase tracking-wider text-secondary-400">Category</span>
+            <span className="w-20 text-right text-xs font-bold uppercase tracking-wider text-secondary-400 flex-shrink-0">Budget</span>
+            <span className="w-20 text-right text-xs font-bold uppercase tracking-wider text-secondary-400 flex-shrink-0">Actual</span>
+            <span className="w-20 text-right text-xs font-bold uppercase tracking-wider text-secondary-400 flex-shrink-0">Diff</span>
+          </div>
+
+          {rows.map(row => {
+            const actual = parseFloat(actuals[row.id]) || 0;
+            const diff   = actual - row.budget;
+            const hasVal = !!actuals[row.id];
+            return (
+              <div key={row.id} className="flex items-center px-5 py-2 gap-3 border-b border-secondary-50 hover:bg-secondary-50">
+                <span className="flex-1 text-sm text-secondary-700 truncate">{row.name || '—'}</span>
+                <span className="w-20 text-right text-sm text-secondary-500 flex-shrink-0">{fmt(row.budget)}</span>
+                <div className="w-20 flex-shrink-0 flex justify-end">
+                  <input
+                    type="number"
+                    min="0"
+                    className="border border-secondary-200 rounded px-2 py-1 text-xs text-right w-20 focus:outline-none focus:ring-1 focus:ring-primary-400"
+                    value={actuals[row.id] ?? ''}
+                    onChange={e => onActualChange(row.id, e.target.value)}
+                    placeholder="0"
+                  />
+                </div>
+                <span className={`w-20 text-right text-sm font-semibold flex-shrink-0 ${
+                  hasVal
+                    ? diff > 0 ? 'text-red-500' : diff < 0 ? 'text-primary-600' : 'text-secondary-400'
+                    : 'text-secondary-300'
+                }`}>
+                  {hasVal ? (diff > 0 ? '+' : '') + fmt(diff) : '—'}
+                </span>
+              </div>
+            );
+          })}
+
+          {/* Totals row */}
+          <div className="flex items-center px-5 py-2 gap-3 bg-secondary-50 border-t border-secondary-200">
+            <span className="flex-1 text-xs font-bold uppercase text-secondary-500">Total</span>
+            <span className="w-20 text-right text-sm font-bold text-secondary-700 flex-shrink-0">{fmt(totalBudget)}</span>
+            <span className="w-20 text-right text-sm font-bold text-secondary-700 flex-shrink-0">
+              {hasActuals ? fmt(totalActual) : '—'}
+            </span>
+            <span className={`w-20 text-right text-sm font-bold flex-shrink-0 ${
+              hasActuals
+                ? totalDiff > 0 ? 'text-red-500' : totalDiff < 0 ? 'text-primary-600' : 'text-secondary-400'
+                : 'text-secondary-300'
+            }`}>
+              {hasActuals ? (totalDiff > 0 ? '+' : '') + fmt(totalDiff) : '—'}
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── MonthComparisonView ───────────────────────────────────────────────────── */
+interface MonthComparisonViewProps {
+  incRows: AmtRow[];
+  mortRows: AmtRow[];
+  autoRows: AmtRow[];
+  giveRows: AmtRow[];
+  subs: AmtRow[];
+  insRows: AmtRow[];
+  sinks: SinkRow[];
+  spending: AmtRow[];
+  neededRows: AmtRow[];
+  savings: AmtRow[];
+  totalIncome: number;
+  totalFixed: number;
+  totalVar: number;
+  totalSavings: number;
+  months: MonthData[];
+  activeMonthIdx: number;
+  setActiveMonthIdx: (i: number) => void;
+  setMonths: (months: MonthData[]) => void;
+  onBack: () => void;
+  onNextMonth: () => void;
+}
+
+function MonthComparisonView({
+  incRows, mortRows, autoRows, giveRows, subs, insRows, sinks,
+  spending, neededRows, savings,
+  totalIncome, totalFixed, totalVar, totalSavings,
+  months, activeMonthIdx, setActiveMonthIdx, setMonths, onBack, onNextMonth,
+}: MonthComparisonViewProps) {
+  const activeMonth = months[activeMonthIdx];
+  const actuals     = activeMonth?.actuals ?? {};
+
+  const updateActual = (rowId: string, value: string) => {
+    const updated = months.map((m, i) =>
+      i === activeMonthIdx
+        ? { ...m, actuals: { ...m.actuals, [rowId]: value } }
+        : m
+    );
+    setMonths(updated);
+  };
+
+  // Build comparison row groups
+  const incComp = incRows.map(r => ({ id: r.id, name: r.name, budget: nv(r.amount) }));
+  const fixedComp = [
+    ...mortRows.map(r => ({ id: r.id, name: r.name, budget: nv(r.amount) })),
+    ...autoRows.map(r => ({ id: r.id, name: r.name, budget: nv(r.amount) })),
+    ...giveRows.map(r => ({ id: r.id, name: r.name, budget: nv(r.amount) })),
+    ...subs.map(r => ({ id: r.id, name: r.name, budget: nv(r.amount) })),
+    ...insRows.map(r => ({ id: r.id, name: r.name, budget: nv(r.amount) })),
+    ...sinks.map(r => ({ id: r.id, name: r.name, budget: Math.round(nv(r.amount) / fdiv(r.freq)) })),
+  ];
+  const varComp = [
+    ...spending.map(r => ({ id: r.id, name: r.name, budget: nv(r.amount) })),
+    ...neededRows.map(r => ({ id: r.id, name: r.name, budget: nv(r.amount) })),
+  ];
+  const savingsComp = savings.map(r => ({ id: r.id, name: r.name, budget: nv(r.amount) }));
+
+  // Derived summary actuals
+  const actualIncome   = incComp.reduce((s, r) => s + (parseFloat(actuals[r.id]) || 0), 0);
+  const actualFixed    = fixedComp.reduce((s, r) => s + (parseFloat(actuals[r.id]) || 0), 0);
+  const actualVar      = varComp.reduce((s, r) => s + (parseFloat(actuals[r.id]) || 0), 0);
+  const actualSavings  = savingsComp.reduce((s, r) => s + (parseFloat(actuals[r.id]) || 0), 0);
+  const actualLeftover = actualIncome - actualFixed - actualVar - actualSavings;
+  const budgetLeftover = totalIncome - totalFixed - totalVar - totalSavings;
+  const hasAnyActuals  = [...incComp, ...fixedComp, ...varComp, ...savingsComp].some(r => actuals[r.id]);
+
+  return (
+    <div className="container-custom py-8 max-w-3xl mx-auto">
+      {/* Header bar */}
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 text-sm text-secondary-600 hover:text-secondary-800 font-semibold transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          Back to Budget
+        </button>
+        <h2 className="text-xl font-bold text-secondary-800">Monthly Comparison</h2>
+      </div>
+
+      {/* Month tabs */}
+      {months.length > 1 && (
+        <div className="flex gap-2 flex-wrap mb-4 overflow-x-auto pb-1">
+          {months.map((m, i) => (
+            <button
+              key={i}
+              onClick={() => setActiveMonthIdx(i)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
+                i === activeMonthIdx
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-secondary-100 text-secondary-600 hover:bg-secondary-200'
+              }`}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Active month label */}
+      <div className="bg-primary-50 border border-primary-200 rounded-xl px-5 py-3 mb-4">
+        <p className="font-bold text-primary-700">{activeMonth?.label}</p>
+        <p className="text-primary-500 text-xs">Enter actual amounts spent this month. Changes save automatically.</p>
+      </div>
+
+      {/* Comparison sections */}
+      <ComparisonSection title="Income" rows={incComp} actuals={actuals} onActualChange={updateActual} />
+      <ComparisonSection title="Fixed Costs" rows={fixedComp} actuals={actuals} onActualChange={updateActual} />
+      <ComparisonSection title="Variable Costs" rows={varComp} actuals={actuals} onActualChange={updateActual} />
+      <ComparisonSection title="Savings" rows={savingsComp} actuals={actuals} onActualChange={updateActual} />
+
+      {/* Summary card — only when some actuals entered */}
+      {hasAnyActuals && (
+        <div className="bg-white rounded-xl shadow-sm border border-secondary-200 p-5 mb-4">
+          <h3 className="font-bold text-secondary-800 mb-3 text-sm">Summary</h3>
+          {[
+            { label: 'Total Income',   budget: totalIncome,  actual: actualIncome  },
+            { label: 'Fixed Costs',    budget: totalFixed,   actual: actualFixed   },
+            { label: 'Variable Costs', budget: totalVar,     actual: actualVar     },
+            { label: 'Savings',        budget: totalSavings, actual: actualSavings },
+          ].map(row => {
+            const diff = row.actual - row.budget;
+            return (
+              <div key={row.label} className="flex items-center justify-between py-1.5 border-b border-secondary-100 gap-4">
+                <span className="text-sm text-secondary-600 flex-shrink-0">{row.label}</span>
+                <div className="flex items-center gap-4 flex-shrink-0">
+                  <span className="text-xs text-secondary-400 w-24 text-right hidden sm:block">Budget: {fmt(row.budget)}</span>
+                  <span className="text-sm font-semibold text-secondary-700 w-20 text-right">{fmt(row.actual)}</span>
+                  <span className={`text-sm font-bold w-20 text-right ${diff > 0 ? 'text-red-500' : diff < 0 ? 'text-primary-600' : 'text-secondary-400'}`}>
+                    {diff !== 0 ? (diff > 0 ? '+' : '') + fmt(diff) : '—'}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+          <div className={`flex items-center justify-between pt-3 mt-2 border-t-2 gap-4 ${actualLeftover >= 0 ? 'border-primary-300' : 'border-red-300'}`}>
+            <span className="text-sm font-bold text-secondary-700 flex-shrink-0">Leftover</span>
+            <div className="flex items-center gap-4 flex-shrink-0">
+              <span className="text-xs text-secondary-400 w-24 text-right hidden sm:block">Budget: {fmt(budgetLeftover)}</span>
+              <span className={`text-xl font-bold w-20 text-right ${actualLeftover >= 0 ? 'text-primary-700' : 'text-red-600'}`}>
+                {fmt(actualLeftover)}
+              </span>
+              <span className={`text-sm font-bold w-20 text-right ${
+                actualLeftover - budgetLeftover > 0 ? 'text-primary-600'
+                : actualLeftover - budgetLeftover < 0 ? 'text-red-500'
+                : 'text-secondary-400'
+              }`}>
+                {actualLeftover !== budgetLeftover
+                  ? (actualLeftover - budgetLeftover > 0 ? '+' : '') + fmt(actualLeftover - budgetLeftover)
+                  : '—'}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Save & Next Month */}
+      <div className="flex justify-center mt-6">
+        <button
+          onClick={onNextMonth}
+          className="flex items-center gap-2 px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-lg transition-colors"
+        >
+          Save &amp; Next Month
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ══════════════════════════════════════════════════════════════════════════════
    BudgetPlanner — main component
 ══════════════════════════════════════════════════════════════════════════════ */
 export default function BudgetPlanner() {
+  const { user, openAuthModal } = useAuth();
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
   /* Load once from localStorage (lazy — runs only on mount) */
   const [saved] = useState(() => loadSaved());
@@ -296,7 +651,27 @@ export default function BudgetPlanner() {
   /* Section E */
   const [savings, setSavings] = useState<AmtRow[]>(() => (saved?.savings as AmtRow[]) ?? dfSavings());
 
-  /* ── Auto-save to localStorage on every state change ─────────────────── */
+  /* ── Download dropdown (click-based) ─────────────────────────────────── */
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handle);
+    return () => document.removeEventListener('mousedown', handle);
+  }, []);
+
+  /* ── Month comparison state ───────────────────────────────────────────── */
+  const [months,             setMonths]             = useState<MonthData[]>(() => loadMonths());
+  const [activeMonthIdx,     setActiveMonthIdx]     = useState(0);
+  const [showMonthView,      setShowMonthView]      = useState(false);
+  const [showStartMonthModal,setShowStartMonthModal]= useState(false);
+
+  /* ── Auto-save budget to localStorage on every state change ─────────── */
   useEffect(() => {
     localStorage.setItem(LS_KEY, JSON.stringify({
       open, assets, debts, incRows, mortRows, autoRows, giveRows,
@@ -304,6 +679,61 @@ export default function BudgetPlanner() {
     }));
   }, [open, assets, debts, incRows, mortRows, autoRows, giveRows,
       subs, insRows, sinks, spending, neededRows, savings]);
+
+  /* ── Auto-save months to localStorage ────────────────────────────────── */
+  useEffect(() => {
+    localStorage.setItem(LS_MONTHS_KEY, JSON.stringify(months));
+  }, [months]);
+
+  /* ── Cloud save / load ────────────────────────────────────────────────── */
+  const getBudgetSnapshot = useCallback(() => ({
+    open, assets, debts, incRows, mortRows, autoRows, giveRows,
+    subs, insRows, sinks, spending, neededRows, savings,
+  }), [open, assets, debts, incRows, mortRows, autoRows, giveRows,
+       subs, insRows, sinks, spending, neededRows, savings]);
+
+  const applySnapshot = useCallback((snap: Record<string, unknown>) => {
+    if (snap.open)       setOpen(snap.open as Record<string, boolean>);
+    if (snap.assets)     setAssets(snap.assets as NVRow[]);
+    if (snap.debts)      setDebts(snap.debts as NVRow[]);
+    if (snap.incRows)    setIncRows(snap.incRows as AmtRow[]);
+    if (snap.mortRows)   setMortRows(snap.mortRows as AmtRow[]);
+    if (snap.autoRows)   setAutoRows(snap.autoRows as AmtRow[]);
+    if (snap.giveRows)   setGiveRows(snap.giveRows as AmtRow[]);
+    if (snap.subs)       setSubs(snap.subs as AmtRow[]);
+    if (snap.insRows)    setInsRows(snap.insRows as AmtRow[]);
+    if (snap.sinks)      setSinks(snap.sinks as SinkRow[]);
+    if (snap.spending)   setSpending(snap.spending as AmtRow[]);
+    if (snap.neededRows) setNeededRows(snap.neededRows as AmtRow[]);
+    if (snap.savings)    setSavings(snap.savings as AmtRow[]);
+  }, []);
+
+  // Load cloud data when user signs in
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('user_tool_data')
+      .select('budget_data')
+      .eq('user_id', user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.budget_data) {
+          applySnapshot(data.budget_data as Record<string, unknown>);
+        }
+      });
+  }, [user, applySnapshot]);
+
+  const handleSaveToAccount = async () => {
+    if (!user) { openAuthModal(); return; }
+    setSaveStatus('saving');
+    const snapshot = getBudgetSnapshot();
+    const { error } = await supabase
+      .from('user_tool_data')
+      .upsert({ user_id: user.id, budget_data: snapshot, updated_at: new Date().toISOString() },
+               { onConflict: 'user_id' });
+    setSaveStatus(error ? 'error' : 'saved');
+    setTimeout(() => setSaveStatus('idle'), 3000);
+  };
 
   /* ── Derived calculations ─────────────────────────────────────────────── */
   const totalAssets  = assets.reduce((s, r) => s + nv(r.value), 0);
@@ -367,60 +797,118 @@ export default function BudgetPlanner() {
     if (bucket.spending.length)      setSpending(p => [...p, ...bucket.spending]);
     if (bucket.needed.length)        setNeededRows(p => [...p, ...bucket.needed]);
     if (bucket.savings.length)       setSavings(p => [...p, ...bucket.savings]);
-    // Expand the affected budget sections
     setOpen(p => ({ ...p, B: true, C: true, D: true, E: true }));
   };
 
-  /* ── Build workbook (shared between download and email) ───────────────── */
+  /* ── Build workbook — template format ────────────────────────────────── */
   const buildWorkbook = () => {
-    const $ = (n: number) => n || 0;
-    const rows: (string | number)[][] = [
-      ['Money-Willo — Monthly Budget'],
-      [`Generated: ${new Date().toLocaleDateString()}`],
-      [],
-      ['INCOME', 'Monthly Amount'],
-      ...incRows.map(r => [r.name, $(nv(r.amount))]),
-      ['TOTAL INCOME', totalIncome],
-      [],
-      ['FIXED COSTS — Mortgage / Housing', ''],
-      ...mortRows.map(r => [r.name, $(nv(r.amount))]),
-      ['FIXED COSTS — Auto', ''],
-      ...autoRows.map(r => [r.name, $(nv(r.amount))]),
-      ['FIXED COSTS — Giving & Charity', ''],
-      ...giveRows.map(r => [r.name, $(nv(r.amount))]),
-      ['FIXED COSTS — Subscriptions', ''],
-      ...subs.map(r => [r.name, $(nv(r.amount))]),
-      ['FIXED COSTS — Insurance', ''],
-      ...insRows.map(r => [r.name, $(nv(r.amount))]),
-      ['FIXED COSTS — Sinking Funds (monthly equiv.)', ''],
-      ...sinks.map(r => [r.name, Math.round($(nv(r.amount)) / fdiv(r.freq))]),
-      ['TOTAL FIXED COSTS', totalFixed],
-      [],
-      ['VARIABLE COSTS — Discretionary', ''],
-      ...spending.map(r => [r.name, $(nv(r.amount))]),
-      ['VARIABLE COSTS — Necessities & Utilities', ''],
-      ...neededRows.map(r => [r.name, $(nv(r.amount))]),
-      ['TOTAL VARIABLE COSTS', totalVar],
-      [],
-      ['SAVINGS BUCKETS', ''],
-      ...savings.map(r => [r.name, $(nv(r.amount))]),
-      ['TOTAL SAVINGS', totalSavings],
-      [],
-      ['SUMMARY', ''],
-      ['Total Income', totalIncome],
-      ['Total Fixed Costs', totalFixed],
-      ['Total Variable Costs', totalVar],
-      ['Total Savings', totalSavings],
-      ['Leftover', leftover],
-      [],
-      ['NET WORTH SNAPSHOT', ''],
-      ...assets.map(r => [r.name + ' (asset)', $(nv(r.value))]),
-      ...debts.map(r => [r.name + ' (debt)', -$(nv(r.value))]),
-      ['Estimated Net Worth', netWorth],
+    const WB_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const headers: (string | number)[] = ['Account', 'Category', 'Budget', ...WB_MONTHS];
+
+    const data: (string | number)[][] = [headers];
+    const sectionHeaderIndices: number[] = [];
+
+    const addSectionHeader = (title: string) => {
+      sectionHeaderIndices.push(data.length);
+      data.push(['', title, '', ...new Array(12).fill('')]);
+    };
+
+    const makeRow = (account: string, category: string, budget: number, rowId?: string): (string | number)[] => {
+      const actCols: (string | number)[] = new Array(12).fill('');
+      if (rowId && months.length > 0) {
+        for (const monthData of months) {
+          const parts = monthData.label.split(' ');
+          const mIdx = MONTH_NAMES.indexOf(parts[0]);
+          if (mIdx >= 0) {
+            const val = monthData.actuals[rowId];
+            if (val) actCols[mIdx] = parseFloat(val) || '';
+          }
+        }
+      }
+      return [account, category, budget, ...actCols];
+    };
+
+    // NET WORTH SNAPSHOT
+    addSectionHeader('NET WORTH SNAPSHOT');
+    data.push(makeRow('Savings Account', 'Estimated Net Worth', netWorth));
+    for (const r of assets) {
+      data.push(makeRow('Savings Account', r.name, nv(r.value), r.id));
+    }
+    for (const r of debts) {
+      data.push(makeRow('Savings Account', r.name, -nv(r.value), r.id));
+    }
+
+    // OVERVIEW
+    addSectionHeader('OVERVIEW');
+    data.push(makeRow('', 'Net Income', totalIncome));
+    for (const r of incRows) {
+      data.push(makeRow('', r.name, nv(r.amount), r.id));
+    }
+    data.push(makeRow('', 'Total Expenses', totalExpenses));
+    data.push(makeRow('', 'Leftover', leftover));
+
+    // FIXED MONTHLY COSTS
+    addSectionHeader('FIXED MONTHLY COSTS');
+    data.push(makeRow('Checking Account', 'Total Fixed Monthly', totalFixed));
+    data.push(makeRow('', 'Total Mortgage', mortTotal));
+    for (const r of mortRows) {
+      data.push(makeRow('', r.name, nv(r.amount), r.id));
+    }
+    data.push(makeRow('', 'Total Auto', autoTotal));
+    for (const r of autoRows) {
+      data.push(makeRow('', r.name, nv(r.amount), r.id));
+    }
+    data.push(makeRow('', 'Gifts & Charity', givingTotal));
+    for (const r of giveRows) {
+      data.push(makeRow('', r.name, nv(r.amount), r.id));
+    }
+    data.push(makeRow('', 'Subscriptions', subsTotal));
+    for (const r of subs) {
+      data.push(makeRow('', r.name, nv(r.amount), r.id));
+    }
+    data.push(makeRow('', 'Insurance', insTotal));
+    for (const r of insRows) {
+      data.push(makeRow('', r.name, nv(r.amount), r.id));
+    }
+    data.push(makeRow('', 'Sinking Funds', sinksTotal));
+    for (const r of sinks) {
+      const freqLabel = FREQS.find(f => f.val === r.freq)?.label ?? r.freq;
+      data.push(makeRow(freqLabel, r.name, Math.round(nv(r.amount) / fdiv(r.freq)), r.id));
+    }
+
+    // FLUCTUATING COSTS
+    addSectionHeader('FLUCTUATING COSTS');
+    data.push(makeRow('', 'Total Fluctuating', totalVar));
+    data.push(makeRow('', 'Discretionary', spendTotal));
+    for (const r of spending) {
+      data.push(makeRow('', r.name, nv(r.amount), r.id));
+    }
+    data.push(makeRow('', 'Necessities', neededTotal));
+    for (const r of neededRows) {
+      data.push(makeRow('', r.name, nv(r.amount), r.id));
+    }
+
+    // SAVINGS
+    addSectionHeader('SAVINGS');
+    data.push(makeRow('', 'Total Savings', totalSavings));
+    for (const r of savings) {
+      data.push(makeRow('', r.name, nv(r.amount), r.id));
+    }
+
+    const ws = XLSX.utils.aoa_to_sheet(data);
+
+    // Column widths: A=28, B=32, C=14, D-O=12 each
+    ws['!cols'] = [
+      { wch: 28 }, { wch: 32 }, { wch: 14 },
+      ...Array(12).fill(null).map(() => ({ wch: 12 })),
     ];
 
-    const ws = XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols'] = [{ wch: 40 }, { wch: 16 }];
+    // Merge section header rows across B:O (columns 1–14)
+    ws['!merges'] = sectionHeaderIndices.map(r => ({
+      s: { r, c: 1 },
+      e: { r, c: 14 },
+    }));
+
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Monthly Budget');
     return wb;
@@ -428,56 +916,64 @@ export default function BudgetPlanner() {
 
   /* ── Download as Excel / ODS ──────────────────────────────────────────── */
   const handleDownload = (format: 'xlsx' | 'ods') => {
+    setDropdownOpen(false);
     XLSX.writeFile(buildWorkbook(), `monthly-budget.${format}`);
   };
 
-  /* ── Email gate state ─────────────────────────────────────────────────── */
-  const [emailGate, setEmailGate] = useState('');
-  const [showEmailGate, setShowEmailGate] = useState(false);
-  const [pendingFormat, setPendingFormat] = useState<'xlsx' | 'ods'>('xlsx');
-  const [emailSending, setEmailSending] = useState(false);
-  const [emailSent, setEmailSent] = useState(false);
-  const [emailError, setEmailError] = useState('');
-
-  const startDownload = (format: 'xlsx' | 'ods') => {
-    setPendingFormat(format);
-    setEmailSent(false);
-    setEmailError('');
-    setShowEmailGate(true);
+  /* ── Month comparison handlers ────────────────────────────────────────── */
+  const handleStartMonth = (label: string) => {
+    const newMonth: MonthData = { label, actuals: {} };
+    setMonths([newMonth]);
+    setActiveMonthIdx(0);
+    setShowStartMonthModal(false);
+    setShowMonthView(true);
   };
 
-  const confirmDownload = async () => {
-    // Always trigger the local file download immediately
-    handleDownload(pendingFormat);
-
-    // If an email was provided, also send via Resend
-    if (emailGate.trim()) {
-      setEmailSending(true);
-      setEmailError('');
-      try {
-        const fileBase64 = XLSX.write(buildWorkbook(), { bookType: pendingFormat, type: 'base64' });
-        const res = await fetch('/api/budget-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: emailGate.trim(), format: pendingFormat, fileBase64 }),
-        });
-        if (!res.ok) throw new Error('Send failed');
-        setEmailSent(true);
-        setTimeout(() => setShowEmailGate(false), 2000);
-      } catch {
-        setEmailError('Could not send email. Your file was still downloaded.');
-      } finally {
-        setEmailSending(false);
-      }
+  const handleNextMonth = () => {
+    const currentLabel = months[activeMonthIdx].label;
+    const nextLabel = nextMonthLabel(currentLabel);
+    const existingIdx = months.findIndex(m => m.label === nextLabel);
+    if (existingIdx >= 0) {
+      setActiveMonthIdx(existingIdx);
     } else {
-      setShowEmailGate(false);
+      const newIdx = months.length;
+      setMonths(prev => [...prev, { label: nextLabel, actuals: {} }]);
+      setActiveMonthIdx(newIdx);
     }
   };
 
   /* ── Import section open/closed ───────────────────────────────────────── */
   const [importOpen, setImportOpen] = useState(false);
 
-  /* ── Render ───────────────────────────────────────────────────────────── */
+  /* ── Comparison view — full-page replacement ─────────────────────────── */
+  if (showMonthView && months.length > 0) {
+    return (
+      <MonthComparisonView
+        incRows={incRows}
+        mortRows={mortRows}
+        autoRows={autoRows}
+        giveRows={giveRows}
+        subs={subs}
+        insRows={insRows}
+        sinks={sinks}
+        spending={spending}
+        neededRows={neededRows}
+        savings={savings}
+        totalIncome={totalIncome}
+        totalFixed={totalFixed}
+        totalVar={totalVar}
+        totalSavings={totalSavings}
+        months={months}
+        activeMonthIdx={activeMonthIdx}
+        setActiveMonthIdx={setActiveMonthIdx}
+        setMonths={setMonths}
+        onBack={() => setShowMonthView(false)}
+        onNextMonth={handleNextMonth}
+      />
+    );
+  }
+
+  /* ── Render budget view ───────────────────────────────────────────────── */
   return (
     <div className="container-custom py-8 max-w-3xl mx-auto">
 
@@ -486,13 +982,53 @@ export default function BudgetPlanner() {
         <div>
           <h2 className="text-xl font-bold text-secondary-800">Interactive Budget Planner</h2>
           <p className="text-secondary-400 text-xs mt-0.5">
-            Your data is saved locally in your browser — nothing is transmitted.
+            {user
+              ? 'Signed in — click Save to sync your data to your account.'
+              : 'Data saves locally. Sign in to keep it permanently.'}
           </p>
         </div>
         <div className="flex gap-2 flex-shrink-0 flex-wrap">
-          {/* Download dropdown */}
-          <div className="relative group">
-            <button className="flex items-center gap-1.5 px-3 py-2 border border-primary-300 rounded-lg text-primary-700 hover:bg-primary-50 text-xs font-semibold transition-colors">
+
+          {/* Save to account */}
+          <button
+            onClick={handleSaveToAccount}
+            disabled={saveStatus === 'saving'}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 ${
+              saveStatus === 'saved'
+                ? 'bg-green-100 border border-green-300 text-green-700'
+                : saveStatus === 'error'
+                ? 'bg-red-100 border border-red-300 text-red-600'
+                : 'bg-primary-600 text-white hover:bg-primary-700'
+            }`}
+          >
+            {saveStatus === 'saved' ? (
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Saved!
+              </>
+            ) : saveStatus === 'error' ? (
+              'Error — try again'
+            ) : saveStatus === 'saving' ? (
+              'Saving…'
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                </svg>
+                {user ? 'Save' : 'Save to Account'}
+              </>
+            )}
+          </button>
+
+          {/* Download dropdown — click-based */}
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setDropdownOpen(p => !p)}
+              className="flex items-center gap-1.5 px-3 py-2 border border-primary-300 rounded-lg text-primary-700 hover:bg-primary-50 text-xs font-semibold transition-colors"
+            >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                   d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -502,15 +1038,22 @@ export default function BudgetPlanner() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
             </button>
-            <div className="absolute right-0 top-full mt-1 bg-white border border-secondary-200 rounded-lg shadow-lg py-1 z-30 hidden group-hover:block min-w-[140px]">
-              <button onClick={() => startDownload('xlsx')} className="w-full text-left px-4 py-2 text-xs text-secondary-700 hover:bg-secondary-50 font-medium">
+            <div className={`absolute right-0 top-full mt-1 bg-white border border-secondary-200 rounded-lg shadow-lg py-1 z-30 min-w-[140px] ${dropdownOpen ? 'block' : 'hidden'}`}>
+              <button
+                onClick={() => handleDownload('xlsx')}
+                className="w-full text-left px-4 py-2 text-xs text-secondary-700 hover:bg-secondary-50 font-medium"
+              >
                 Excel (.xlsx)
               </button>
-              <button onClick={() => startDownload('ods')} className="w-full text-left px-4 py-2 text-xs text-secondary-700 hover:bg-secondary-50 font-medium">
+              <button
+                onClick={() => handleDownload('ods')}
+                className="w-full text-left px-4 py-2 text-xs text-secondary-700 hover:bg-secondary-50 font-medium"
+              >
                 OpenDocument (.ods)
               </button>
             </div>
           </div>
+
           <button
             onClick={handlePrint}
             className="flex items-center gap-1.5 px-3 py-2 border border-secondary-300 rounded-lg text-secondary-600 hover:bg-secondary-100 text-xs font-semibold transition-colors"
@@ -534,49 +1077,12 @@ export default function BudgetPlanner() {
         </div>
       </div>
 
-      {/* Email gate modal */}
-      {showEmailGate && (
-        <div data-noprint className="fixed inset-0 bg-secondary-900 bg-opacity-40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6">
-            <h3 className="font-bold text-secondary-800 mb-1">Download Budget Spreadsheet</h3>
-            <p className="text-secondary-500 text-xs mb-4 leading-relaxed">
-              Optionally enter your email to also receive a copy. Your email is never shared.
-            </p>
-            <input
-              className="w-full border border-secondary-300 rounded-lg px-3 py-2 text-sm mb-1 focus:outline-none focus:ring-2 focus:ring-primary-500"
-              type="email"
-              placeholder="your@email.com (optional)"
-              value={emailGate}
-              onChange={e => { setEmailGate(e.target.value); setEmailSent(false); setEmailError(''); }}
-              disabled={emailSending}
-            />
-            {emailSent ? (
-              <p className="text-primary-600 text-xs mb-4 font-semibold">Email sent! Check your inbox.</p>
-            ) : emailError ? (
-              <p className="text-red-500 text-xs mb-4">{emailError}</p>
-            ) : (
-              <p className="text-secondary-400 text-xs mb-4">
-                Enter your email to also receive a copy — your download starts immediately either way.
-              </p>
-            )}
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => setShowEmailGate(false)}
-                className="px-4 py-2 text-xs text-secondary-500 hover:text-secondary-700 font-semibold transition-colors"
-                disabled={emailSending}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmDownload}
-                disabled={emailSending}
-                className="px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-60 text-white text-xs font-semibold rounded-lg transition-colors"
-              >
-                {emailSending ? 'Sending…' : 'Download'}
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* Start Month modal */}
+      {showStartMonthModal && (
+        <StartMonthModal
+          onConfirm={handleStartMonth}
+          onCancel={() => setShowStartMonthModal(false)}
+        />
       )}
 
       {/* ── Import from Bank Statements ───────────────────────────────────── */}
@@ -808,6 +1314,20 @@ export default function BudgetPlanner() {
         <AmtRowList rows={savings} setRows={setSavings} addLabel="Add Savings Bucket" />
         <SectionTotal label="Total Monthly Savings" amount={totalSavings} />
       </SectionCard>
+
+      {/* ── Compare Months button ─────────────────────────────────────────── */}
+      <div className="mt-6 flex justify-center">
+        <button
+          onClick={() => months.length === 0 ? setShowStartMonthModal(true) : setShowMonthView(true)}
+          className="flex items-center gap-2 px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-lg transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          Compare Months
+        </button>
+      </div>
 
     </div>
   );
