@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import Head from 'next/head';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import BudgetPlanner from '@/components/BudgetPlanner';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+
+const TransactionPanel = dynamic(() => import('@/components/TransactionPanel'), { ssr: false });
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -62,7 +65,7 @@ export default function ToolsPage() {
   const { user, openAuthModal } = useAuth();
   const [calcSaveStatus, setCalcSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
-  const [activeTab, setActiveTab] = useState<'calculators' | 'budget'>('calculators');
+  const [activeTab, setActiveTab] = useState<'calculators' | 'budget' | 'transactions'>('calculators');
   const [openCalc, setOpenCalc] = useState<CalcId | null>('mortgage');
 
   const toggleCalc = (id: CalcId) =>
@@ -805,7 +808,7 @@ export default function ToolsPage() {
 
         <main className="flex-1 bg-secondary-50">
           {/* Page Hero */}
-          <section className="bg-primary-700 text-white py-10 px-4">
+          <section data-noprint className="bg-primary-700 text-white py-10 px-4">
             <div className="container-custom text-center">
               <h1 className="text-3xl md:text-4xl font-bold mb-3 text-white">Financial Tools</h1>
               <p className="text-primary-100 text-base md:text-lg max-w-2xl mx-auto leading-relaxed">
@@ -816,7 +819,7 @@ export default function ToolsPage() {
           </section>
 
           {/* Tab Nav */}
-          <div className="bg-white border-b border-secondary-200 sticky top-[64px] md:top-[80px] z-20">
+          <div data-noprint className="bg-white border-b border-secondary-200 sticky top-[64px] md:top-[80px] z-20">
             <div className="container-custom">
               <div className="flex">
                 <button
@@ -838,6 +841,16 @@ export default function ToolsPage() {
                   }`}
                 >
                   Budget Planner
+                </button>
+                <button
+                  onClick={() => setActiveTab('transactions')}
+                  className={`px-6 py-4 text-sm font-semibold border-b-2 transition-colors duration-200 focus:outline-none ${
+                    activeTab === 'transactions'
+                      ? 'border-primary-600 text-primary-700'
+                      : 'border-transparent text-secondary-500 hover:text-secondary-700'
+                  }`}
+                >
+                  Transactions
                 </button>
               </div>
             </div>
@@ -932,6 +945,13 @@ export default function ToolsPage() {
           {activeTab === 'budget' && (
             <section className="bg-secondary-50 min-h-[50vh]">
               <BudgetPlanner />
+            </section>
+          )}
+
+          {/* ── Transactions Tab ─────────────────────────────────────────────── */}
+          {activeTab === 'transactions' && (
+            <section className="bg-secondary-50 min-h-[50vh]">
+              <TransactionPanel />
             </section>
           )}
         </main>

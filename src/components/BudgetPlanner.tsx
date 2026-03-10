@@ -3,12 +3,19 @@ import * as XLSX from 'xlsx';
 import StatementImporter, { AppliedItem } from './StatementImporter';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { getUserTransactions, getGlobalCategories } from '@/lib/dataService';
 
 /* ─── Types ────────────────────────────────────────────────────────────────── */
 interface NVRow   { id: string; name: string; value: string; }
 interface AmtRow  { id: string; name: string; amount: string; }
 interface SinkRow { id: string; name: string; amount: string; freq: FreqVal; }
 type FreqVal = 'weekly' | 'biweekly' | 'monthly' | 'every2' | 'quarterly' | 'every4' | 'twice' | 'yearly';
+
+interface SubsectionData {
+  id: string;
+  label: string;
+  rows: AmtRow[];
+}
 
 interface MonthData {
   label: string;                    // "March 2025"
@@ -43,16 +50,6 @@ const MONTH_NAMES = [
   'January','February','March','April','May','June',
   'July','August','September','October','November','December',
 ];
-
-function nextMonthLabel(current: string): string {
-  const parts = current.split(' ');
-  const month = parts[0];
-  const year  = parts[1];
-  const idx = MONTH_NAMES.indexOf(month);
-  return idx === 11
-    ? `January ${parseInt(year) + 1}`
-    : `${MONTH_NAMES[idx + 1]} ${year}`;
-}
 
 /* ─── Style tokens ─────────────────────────────────────────────────────────── */
 const inp     = 'border border-secondary-300 rounded-lg px-3 py-2 text-secondary-800 text-sm '
@@ -130,6 +127,18 @@ const dfSavings  = (): AmtRow[]  => [
   { id: uid(), name: 'Emergency Fund',            amount: '' },
 ];
 
+const dfFixedSubs = (): SubsectionData[] => [
+  { id: 'mort', label: 'Mortgage / Housing', rows: dfMort() },
+  { id: 'auto', label: 'Auto', rows: dfAuto() },
+  { id: 'give', label: 'Giving & Charity', rows: dfGive() },
+  { id: 'subs', label: 'Monthly Subscriptions', rows: dfSubs() },
+  { id: 'ins',  label: 'Insurance', rows: dfIns() },
+];
+const dfVarSubs = (): SubsectionData[] => [
+  { id: 'spend',  label: 'Discretionary Spending', rows: dfSpending() },
+  { id: 'needed', label: 'Necessities & Utilities', rows: dfNeeded() },
+];
+
 /* ─── localStorage persistence ─────────────────────────────────────────────── */
 const LS_KEY        = 'ramseycoach_budget';
 const LS_MONTHS_KEY = 'ramseycoach_budget_months';
@@ -149,6 +158,19 @@ const loadMonths = (): MonthData[] => {
     return s ? (JSON.parse(s) as MonthData[]) : [];
   } catch { return []; }
 };
+
+/* ─── TxIndicator category mapper ──────────────────────────────────────────── */
+function getTxCategories(subLabel: string): string[] {
+  const l = subLabel.toLowerCase();
+  if (l.includes('mortgage') || l.includes('housing')) return ['Housing'];
+  if (l.includes('auto') || l.includes('car') || l.includes('transport')) return ['Auto & Transportation'];
+  if (l.includes('giv') || l.includes('charit') || l.includes('tithe')) return ['Giving & Charity'];
+  if (l.includes('subscri') || l.includes('entertain') || l.includes('stream')) return ['Entertainment & Subscriptions'];
+  if (l.includes('spend') || l.includes('discret') || l.includes('misc')) return ['Miscellaneous', 'Personal Care'];
+  if (l.includes('necessit') || l.includes('utilit') || l.includes('groceri')) return ['Utilities', 'Food & Grocery'];
+  if (l.includes('saving')) return ['Savings'];
+  return [];
+}
 
 /* ══════════════════════════════════════════════════════════════════════════════
    Module-level sub-components.
@@ -222,37 +244,151 @@ function SectionTotal({ label, amount }: { label: string; amount: number }) {
   );
 }
 
-function AmtRowList({ rows, setRows, addLabel }: {
+function TxIndicator({ budgeted, categoryNames, txByCat }: {
+  budgeted: number;
+  categoryNames: string[];
+  txByCat: Record<string, { count: number; total: number }>;
+}) {
+  const spent = categoryNames.reduce((sum, n) => sum + (txByCat[n]?.total ?? 0), 0);
+  const count = categoryNames.reduce((sum, n) => sum + (txByCat[n]?.count ?? 0), 0);
+  if (count === 0) return null;
+  const ratio = budgeted > 0 ? spent / budgeted : 0;
+  const cls = ratio <= 1
+    ? 'border-green-200 bg-green-50 text-green-700'
+    : ratio <= 1.1
+    ? 'border-amber-200 bg-amber-50 text-amber-700'
+    : 'border-red-200 bg-red-50 text-red-700';
+  return (
+    <div className={`flex items-center justify-between rounded-lg border px-3 py-1.5 text-xs mt-2 ${cls}`}>
+      <span>{count} transaction{count !== 1 ? 's' : ''} this month</span>
+      <span className="font-semibold">
+        {fmt(spent)} spent{budgeted > 0 ? ` of ${fmt(budgeted)}` : ''}
+      </span>
+    </div>
+  );
+}
+
+interface AmtRowListProps {
   rows: AmtRow[];
   setRows: (r: AmtRow[]) => void;
   addLabel: string;
-}) {
+  sectionKey?: string;
+  selectedKeys?: Set<string>;
+  onToggleSelect?: (key: string) => void;
+  pendingMove?: boolean;
+  onMoveHere?: () => void;
+  onPushUndo?: () => void;
+  dragItem?: React.MutableRefObject<{ sectionType: string; subId: string; rowId: string } | null>;
+  dragOverItem?: React.MutableRefObject<{ sectionType: string; subId: string; rowId: string } | null>;
+  onDropReorder?: (rows: AmtRow[]) => void;
+  onDropMove?: (fromSectionType: string, fromSubId: string, rowId: string) => void;
+}
+
+function AmtRowList({
+  rows, setRows, addLabel,
+  sectionKey, selectedKeys, onToggleSelect,
+  pendingMove, onMoveHere, onPushUndo,
+  dragItem, dragOverItem, onDropReorder, onDropMove,
+}: AmtRowListProps) {
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+
+  // Parse sectionType and subId from sectionKey (e.g. "fixed:mort")
+  const [sectionType, subId] = sectionKey ? sectionKey.split(':') : ['', ''];
+
   return (
     <div className="space-y-2">
-      {rows.map((row, i) => (
-        <div key={row.id} className="flex gap-2 items-center">
-          <input
-            className={inpFull}
-            value={row.name}
-            onChange={e => setRows(setAmtField(rows, i, 'name', e.target.value))}
-            placeholder="Description"
-          />
-          <input
-            className={`${inp} w-28 flex-shrink-0 text-right`}
-            type="number"
-            min="0"
-            value={row.amount}
-            onChange={e => setRows(setAmtField(rows, i, 'amount', e.target.value))}
-            placeholder="0"
-          />
-          <button onClick={() => setRows(rows.filter((_, j) => j !== i))} className={rmBtn} title="Remove">
-            ×
-          </button>
-        </div>
-      ))}
-      <button onClick={() => setRows([...rows, { id: uid(), name: '', amount: '' }])} className={addBtn}>
-        <span className="font-bold text-base">+</span> {addLabel}
-      </button>
+      {rows.map((row, i) => {
+        const rowKey = sectionKey ? `${sectionKey}:${row.id}` : '';
+        const isSelected = rowKey && selectedKeys ? selectedKeys.has(rowKey) : false;
+        return (
+          <div
+            key={row.id}
+            className={`flex gap-2 items-center rounded transition-colors ${isSelected ? 'bg-primary-50' : ''} ${dragOverIdx === i ? 'border-t-2 border-primary-400' : ''}`}
+            draggable={!!dragItem}
+            onDragStart={() => {
+              if (dragItem) dragItem.current = { sectionType, subId, rowId: row.id };
+            }}
+            onDragOver={e => {
+              e.preventDefault();
+              if (dragItem?.current && dragItem.current.rowId !== row.id) {
+                setDragOverIdx(i);
+                if (dragOverItem) dragOverItem.current = { sectionType, subId, rowId: row.id };
+              }
+            }}
+            onDrop={e => {
+              e.preventDefault();
+              setDragOverIdx(null);
+              if (!dragItem?.current) return;
+              const from = dragItem.current;
+              if (from.sectionType === sectionType && from.subId === subId) {
+                // Reorder within same sub
+                if (onDropReorder && from.rowId !== row.id) {
+                  const fromIdx = rows.findIndex(r => r.id === from.rowId);
+                  if (fromIdx < 0) return;
+                  const newRows = [...rows];
+                  const [moved] = newRows.splice(fromIdx, 1);
+                  newRows.splice(i, 0, moved);
+                  onPushUndo?.();
+                  onDropReorder(newRows);
+                }
+              } else {
+                // Move to different sub
+                if (onDropMove) {
+                  onPushUndo?.();
+                  onDropMove(from.sectionType, from.subId, from.rowId);
+                }
+              }
+              dragItem.current = null;
+            }}
+            onDragEnd={() => {
+              setDragOverIdx(null);
+              if (dragItem) dragItem.current = null;
+            }}
+          >
+            {/* Drag handle */}
+            {dragItem && (
+              <span className="text-secondary-300 cursor-grab active:cursor-grabbing text-base select-none flex-shrink-0 px-0.5" title="Drag to reorder">
+                ⠿
+              </span>
+            )}
+            {/* Checkbox for selection */}
+            {sectionKey && onToggleSelect && (
+              <input
+                type="checkbox"
+                checked={isSelected}
+                onChange={() => onToggleSelect(rowKey)}
+                className="flex-shrink-0 w-4 h-4 accent-primary-600 cursor-pointer"
+              />
+            )}
+            <input
+              className={inpFull}
+              value={row.name}
+              onChange={e => setRows(setAmtField(rows, i, 'name', e.target.value))}
+              placeholder="Description"
+            />
+            <input
+              className={`${inp} w-28 flex-shrink-0 text-right`}
+              type="number"
+              min="0"
+              value={row.amount}
+              onChange={e => setRows(setAmtField(rows, i, 'amount', e.target.value))}
+              placeholder="0"
+            />
+            <button onClick={() => { onPushUndo?.(); setRows(rows.filter((_, j) => j !== i)); }} className={rmBtn} title="Remove">
+              ×
+            </button>
+          </div>
+        );
+      })}
+      {pendingMove && onMoveHere ? (
+        <button onClick={onMoveHere} className="text-primary-600 hover:text-primary-800 text-sm font-semibold flex items-center gap-1 mt-3 transition-colors border border-dashed border-primary-400 rounded-lg px-3 py-2 w-full justify-center">
+          <span className="font-bold text-base">→</span> Move selected here
+        </button>
+      ) : (
+        <button onClick={() => { onPushUndo?.(); setRows([...rows, { id: uid(), name: '', amount: '' }]); }} className={addBtn}>
+          <span className="font-bold text-base">+</span> {addLabel}
+        </button>
+      )}
     </div>
   );
 }
@@ -292,46 +428,63 @@ function NVRowList({ rows, setRows, addLabel }: {
   );
 }
 
-/* ─── StartMonthModal ───────────────────────────────────────────────────────── */
-function StartMonthModal({ onConfirm, onCancel }: { onConfirm: (label: string) => void; onCancel: () => void }) {
-  const [value, setValue] = useState('');
+/* ─── EditableSubHeader ─────────────────────────────────────────────────────── */
+interface EditableSubHeaderProps {
+  label: string;
+  onLabelChange: (v: string) => void;
+  onDelete: () => void;
+  extraNote?: string;
+}
+function EditableSubHeader({ label, onLabelChange, onDelete, extraNote }: EditableSubHeaderProps) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(label);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleConfirm = () => {
-    if (!value) return;
-    const [year, month] = value.split('-');
-    const label = `${MONTH_NAMES[parseInt(month) - 1]} ${year}`;
-    onConfirm(label);
+  const commit = () => {
+    setEditing(false);
+    if (draft.trim()) onLabelChange(draft.trim());
+    else setDraft(label);
   };
 
+  useEffect(() => {
+    if (editing) inputRef.current?.focus();
+  }, [editing]);
+
   return (
-    <div className="fixed inset-0 bg-secondary-900 bg-opacity-40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6">
-        <h3 className="font-bold text-secondary-800 mb-1">Start Month Tracking</h3>
-        <p className="text-secondary-500 text-xs mb-4 leading-relaxed">
-          Choose the first month to track actuals against your budget.
-        </p>
+    <div className="flex items-center gap-2 mb-3 pb-1 border-b border-secondary-100">
+      {editing ? (
         <input
-          type="month"
-          className="w-full border border-secondary-300 rounded-lg px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-primary-500"
-          value={value}
-          onChange={e => setValue(e.target.value)}
+          ref={inputRef}
+          className="text-xs font-bold uppercase tracking-wider text-secondary-600 bg-transparent border-b border-primary-400 outline-none flex-1"
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setEditing(false); setDraft(label); } }}
         />
-        <div className="flex gap-2 justify-end">
-          <button
-            onClick={onCancel}
-            className="px-4 py-2 text-xs text-secondary-500 hover:text-secondary-700 font-semibold transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleConfirm}
-            disabled={!value}
-            className="px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-60 text-white text-xs font-semibold rounded-lg transition-colors"
-          >
-            Start Tracking
-          </button>
-        </div>
-      </div>
+      ) : (
+        <span className="text-xs font-bold uppercase tracking-wider text-secondary-400 flex-1">
+          {label}
+          {extraNote && <span className="ml-2 font-normal normal-case tracking-normal text-secondary-400">{extraNote}</span>}
+        </span>
+      )}
+      <button
+        onClick={() => { setDraft(label); setEditing(e => !e); }}
+        className="text-secondary-300 hover:text-primary-500 transition-colors flex-shrink-0"
+        title="Edit label"
+      >
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+        </svg>
+      </button>
+      <button
+        onClick={onDelete}
+        className="text-secondary-300 hover:text-red-400 transition-colors flex-shrink-0"
+        title="Delete subsection"
+      >
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+        </svg>
+      </button>
     </div>
   );
 }
@@ -438,62 +591,182 @@ function ComparisonSection({ title, rows, actuals, onActualChange }: ComparisonS
   );
 }
 
+/* ─── MCVActionButtons — reusable action bar for MonthComparisonView ───────── */
+interface MCVActionButtonsProps {
+  onSave: () => void;
+  onImport: () => void;
+  onUndo: (toIndex?: number) => void;
+  undoStack: BudgetUndoSnapshot[];
+}
+
+function MCVActionButtons({ onSave, onImport, onUndo, undoStack }: MCVActionButtonsProps) {
+  const [savePrintOpen, setSavePrintOpen] = useState(false);
+  const [undoMenuOpen, setUndoMenuOpen] = useState(false);
+  const savePrintRef = useRef<HTMLDivElement>(null);
+  const undoMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (savePrintRef.current && !savePrintRef.current.contains(e.target as Node)) setSavePrintOpen(false);
+      if (undoMenuRef.current && !undoMenuRef.current.contains(e.target as Node)) setUndoMenuOpen(false);
+    }
+    document.addEventListener('mousedown', handle);
+    return () => document.removeEventListener('mousedown', handle);
+  }, []);
+
+  const relTime = (ts: number) => {
+    const diff = Math.floor((Date.now() - ts) / 1000);
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
+    return `${Math.floor(diff / 3600)} hr ago`;
+  };
+
+  return (
+    <div className="flex gap-2 flex-wrap">
+      {/* Save / Print dropdown */}
+      <div className="relative" ref={savePrintRef}>
+        <button
+          onClick={() => setSavePrintOpen(p => !p)}
+          className="flex items-center gap-1.5 px-3 py-2 bg-primary-600 text-white hover:bg-primary-700 text-xs font-semibold rounded-lg transition-colors"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+          </svg>
+          Save / Print
+          <svg className="w-3 h-3 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        {savePrintOpen && (
+          <div className="absolute right-0 top-full mt-1 bg-white border border-secondary-200 rounded-lg shadow-lg py-1 z-30 min-w-[180px]">
+            <button
+              onClick={() => { onSave(); setSavePrintOpen(false); }}
+              className="w-full text-left px-4 py-2 text-xs text-secondary-700 hover:bg-secondary-50 font-medium"
+            >
+              Save to account
+            </button>
+            <div className="border-t border-secondary-100 my-1" />
+            <button
+              onClick={() => { window.print(); setSavePrintOpen(false); }}
+              className="w-full text-left px-4 py-2 text-xs text-secondary-700 hover:bg-secondary-50 font-medium"
+            >
+              Print
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Import button */}
+      <button
+        onClick={onImport}
+        className="flex items-center gap-1.5 px-3 py-2 border border-secondary-300 rounded-lg text-secondary-600 hover:bg-secondary-100 text-xs font-semibold transition-colors"
+      >
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+        </svg>
+        Import
+      </button>
+
+      {/* Undo dropdown */}
+      <div className="relative" ref={undoMenuRef}>
+        <button
+          onClick={() => setUndoMenuOpen(p => !p)}
+          className={`flex items-center gap-1.5 px-3 py-2 border border-secondary-300 rounded-lg text-secondary-600 hover:bg-secondary-100 text-xs font-semibold transition-colors ${undoStack.length === 0 ? 'opacity-40' : ''}`}
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6M3 10l6-6" />
+          </svg>
+          Undo
+          <svg className="w-3 h-3 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        {undoMenuOpen && (
+          <div className="absolute right-0 top-full mt-1 bg-white border border-secondary-200 rounded-lg shadow-lg py-1 z-30 min-w-[220px]">
+            {undoStack.length === 0 ? (
+              <span className="block px-4 py-2 text-xs text-secondary-400">Nothing to undo</span>
+            ) : (
+              [...undoStack].reverse().slice(0, 5).map((snap, i) => {
+                const realIdx = undoStack.length - 1 - i;
+                return (
+                  <button
+                    key={realIdx}
+                    onClick={() => { onUndo(realIdx); setUndoMenuOpen(false); }}
+                    className="w-full text-left px-4 py-2 text-xs text-secondary-700 hover:bg-secondary-50 font-medium"
+                  >
+                    Step {realIdx + 1} — {relTime(snap.timestamp)}
+                  </button>
+                );
+              })
+            )}
+            <div className="border-t border-secondary-100 my-1" />
+            <button
+              onClick={() => { setUndoMenuOpen(false); }}
+              className="w-full text-left px-4 py-2 text-xs text-red-500 hover:bg-red-50 font-medium"
+            >
+              Total Reset
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ─── MonthComparisonView ───────────────────────────────────────────────────── */
 interface MonthComparisonViewProps {
   incRows: AmtRow[];
-  mortRows: AmtRow[];
-  autoRows: AmtRow[];
-  giveRows: AmtRow[];
-  subs: AmtRow[];
-  insRows: AmtRow[];
+  fixedSubs: SubsectionData[];
+  varSubs: SubsectionData[];
   sinks: SinkRow[];
-  spending: AmtRow[];
-  neededRows: AmtRow[];
+  sinksLabel: string;
   savings: AmtRow[];
   totalIncome: number;
   totalFixed: number;
   totalVar: number;
   totalSavings: number;
   months: MonthData[];
-  activeMonthIdx: number;
-  setActiveMonthIdx: (i: number) => void;
   setMonths: (months: MonthData[]) => void;
   onBack: () => void;
-  onNextMonth: () => void;
+  onAddFixedSub: (label: string) => void;
+  onAddVarSub: (label: string) => void;
+  onSave: () => void;
+  onImport: () => void;
+  onUndo: (toIndex?: number) => void;
+  undoStack: BudgetUndoSnapshot[];
 }
 
 function MonthComparisonView({
-  incRows, mortRows, autoRows, giveRows, subs, insRows, sinks,
-  spending, neededRows, savings,
+  incRows, fixedSubs, varSubs, sinks, sinksLabel, savings,
   totalIncome, totalFixed, totalVar, totalSavings,
-  months, activeMonthIdx, setActiveMonthIdx, setMonths, onBack, onNextMonth,
+  months, setMonths, onBack,
+  onAddFixedSub, onAddVarSub,
+  onSave, onImport, onUndo, undoStack,
 }: MonthComparisonViewProps) {
-  const activeMonth = months[activeMonthIdx];
-  const actuals     = activeMonth?.actuals ?? {};
+  const now = new Date();
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth());
+
+  const activeLabel = `${MONTH_NAMES[selectedMonth]} ${selectedYear}`;
+  const activeMonth = months.find(m => m.label === activeLabel);
+  const actuals = activeMonth?.actuals ?? {};
 
   const updateActual = (rowId: string, value: string) => {
-    const updated = months.map((m, i) =>
-      i === activeMonthIdx
-        ? { ...m, actuals: { ...m.actuals, [rowId]: value } }
-        : m
-    );
-    setMonths(updated);
+    setMonths(months.map(m => m.label === activeLabel
+      ? { ...m, actuals: { ...m.actuals, [rowId]: value } }
+      : m
+    ).concat(activeMonth ? [] : [{ label: activeLabel, actuals: { [rowId]: value } }]));
   };
 
   // Build comparison row groups
   const incComp = incRows.map(r => ({ id: r.id, name: r.name, budget: nv(r.amount) }));
   const fixedComp = [
-    ...mortRows.map(r => ({ id: r.id, name: r.name, budget: nv(r.amount) })),
-    ...autoRows.map(r => ({ id: r.id, name: r.name, budget: nv(r.amount) })),
-    ...giveRows.map(r => ({ id: r.id, name: r.name, budget: nv(r.amount) })),
-    ...subs.map(r => ({ id: r.id, name: r.name, budget: nv(r.amount) })),
-    ...insRows.map(r => ({ id: r.id, name: r.name, budget: nv(r.amount) })),
+    ...fixedSubs.flatMap(sub => sub.rows.map(r => ({ id: r.id, name: r.name, budget: nv(r.amount) }))),
     ...sinks.map(r => ({ id: r.id, name: r.name, budget: Math.round(nv(r.amount) / fdiv(r.freq)) })),
   ];
-  const varComp = [
-    ...spending.map(r => ({ id: r.id, name: r.name, budget: nv(r.amount) })),
-    ...neededRows.map(r => ({ id: r.id, name: r.name, budget: nv(r.amount) })),
-  ];
+  const varComp = varSubs.flatMap(sub => sub.rows.map(r => ({ id: r.id, name: r.name, budget: nv(r.amount) })));
   const savingsComp = savings.map(r => ({ id: r.id, name: r.name, budget: nv(r.amount) }));
 
   // Derived summary actuals
@@ -504,6 +777,8 @@ function MonthComparisonView({
   const actualLeftover = actualIncome - actualFixed - actualVar - actualSavings;
   const budgetLeftover = totalIncome - totalFixed - totalVar - totalSavings;
   const hasAnyActuals  = [...incComp, ...fixedComp, ...varComp, ...savingsComp].some(r => actuals[r.id]);
+
+  const yearOptions = Array.from({ length: 11 }, (_, i) => now.getFullYear() - 5 + i);
 
   return (
     <div className="container-custom py-8 max-w-3xl mx-auto">
@@ -519,37 +794,71 @@ function MonthComparisonView({
           Back to Budget
         </button>
         <h2 className="text-xl font-bold text-secondary-800">Monthly Comparison</h2>
+        {/* Quick action buttons */}
+        <MCVActionButtons onSave={onSave} onImport={onImport} onUndo={onUndo} undoStack={undoStack} />
       </div>
 
-      {/* Month tabs */}
-      {months.length > 1 && (
-        <div className="flex gap-2 flex-wrap mb-4 overflow-x-auto pb-1">
-          {months.map((m, i) => (
+      {/* Year + Month picker */}
+      <div className="bg-white rounded-xl shadow-sm border border-secondary-200 p-4 mb-4">
+        <div className="flex items-center gap-3 mb-3 flex-wrap">
+          <label className="text-xs font-bold uppercase tracking-wider text-secondary-500">Year</label>
+          <select
+            value={selectedYear}
+            onChange={e => setSelectedYear(Number(e.target.value))}
+            className={`${inp} w-28`}
+          >
+            {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </div>
+        <div className="flex gap-1.5 flex-wrap">
+          {MONTH_NAMES.map((m, i) => (
             <button
-              key={i}
-              onClick={() => setActiveMonthIdx(i)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
-                i === activeMonthIdx
+              key={m}
+              onClick={() => setSelectedMonth(i)}
+              className={`px-2 py-1 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
+                i === selectedMonth
                   ? 'bg-primary-600 text-white'
                   : 'bg-secondary-100 text-secondary-600 hover:bg-secondary-200'
               }`}
             >
-              {m.label}
+              {m.slice(0, 3)}
             </button>
           ))}
         </div>
-      )}
+      </div>
 
       {/* Active month label */}
       <div className="bg-primary-50 border border-primary-200 rounded-xl px-5 py-3 mb-4">
-        <p className="font-bold text-primary-700">{activeMonth?.label}</p>
+        <p className="font-bold text-primary-700">{activeLabel}</p>
         <p className="text-primary-500 text-xs">Enter actual amounts spent this month. Changes save automatically.</p>
       </div>
 
       {/* Comparison sections */}
       <ComparisonSection title="Income" rows={incComp} actuals={actuals} onActualChange={updateActual} />
-      <ComparisonSection title="Fixed Costs" rows={fixedComp} actuals={actuals} onActualChange={updateActual} />
+      <ComparisonSection title={`Fixed Costs (incl. ${sinksLabel})`} rows={fixedComp} actuals={actuals} onActualChange={updateActual} />
+      <div className="flex justify-end mb-2">
+        <button
+          onClick={() => {
+            const label = window.prompt('New fixed subsection name:');
+            if (label?.trim()) onAddFixedSub(label.trim());
+          }}
+          className="text-xs text-primary-600 hover:text-primary-800 font-semibold flex items-center gap-1 transition-colors"
+        >
+          <span className="font-bold">+</span> Add Fixed Subsection
+        </button>
+      </div>
       <ComparisonSection title="Variable Costs" rows={varComp} actuals={actuals} onActualChange={updateActual} />
+      <div className="flex justify-end mb-2">
+        <button
+          onClick={() => {
+            const label = window.prompt('New variable subsection name:');
+            if (label?.trim()) onAddVarSub(label.trim());
+          }}
+          className="text-xs text-primary-600 hover:text-primary-800 font-semibold flex items-center gap-1 transition-colors"
+        >
+          <span className="font-bold">+</span> Add Variable Subsection
+        </button>
+      </div>
       <ComparisonSection title="Savings" rows={savingsComp} actuals={actuals} onActualChange={updateActual} />
 
       {/* Summary card — only when some actuals entered */}
@@ -596,19 +905,6 @@ function MonthComparisonView({
           </div>
         </div>
       )}
-
-      {/* Save & Next Month */}
-      <div className="flex justify-center mt-6">
-        <button
-          onClick={onNextMonth}
-          className="flex items-center gap-2 px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-lg transition-colors"
-        >
-          Save &amp; Next Month
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
-      </div>
     </div>
   );
 }
@@ -616,6 +912,19 @@ function MonthComparisonView({
 /* ══════════════════════════════════════════════════════════════════════════════
    BudgetPlanner — main component
 ══════════════════════════════════════════════════════════════════════════════ */
+
+type BudgetUndoSnapshot = {
+  fixedSubs: SubsectionData[];
+  varSubs: SubsectionData[];
+  sinks: SinkRow[];
+  sinksLabel: string;
+  savings: AmtRow[];
+  incRows: AmtRow[];
+  assets: NVRow[];
+  debts: NVRow[];
+  timestamp: number;
+};
+
 export default function BudgetPlanner() {
   const { user, openAuthModal } = useAuth();
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -636,49 +945,175 @@ export default function BudgetPlanner() {
   /* Section B */
   const [incRows, setIncRows] = useState<AmtRow[]>(() => (saved?.incRows as AmtRow[]) ?? dfIncome());
 
-  /* Section C */
-  const [mortRows, setMortRows] = useState<AmtRow[]>(() => (saved?.mortRows as AmtRow[]) ?? dfMort());
-  const [autoRows, setAutoRows] = useState<AmtRow[]>(() => (saved?.autoRows as AmtRow[]) ?? dfAuto());
-  const [giveRows, setGiveRows] = useState<AmtRow[]>(() => (saved?.giveRows as AmtRow[]) ?? dfGive());
-  const [subs,     setSubs]     = useState<AmtRow[]>(() => (saved?.subs     as AmtRow[]) ?? dfSubs());
-  const [insRows,  setInsRows]  = useState<AmtRow[]>(() => (saved?.insRows  as AmtRow[]) ?? dfIns());
-  const [sinks,    setSinks]    = useState<SinkRow[]>(() => (saved?.sinks   as SinkRow[]) ?? dfSinks());
+  /* Section C — dynamic subsections */
+  const [fixedSubs, setFixedSubs] = useState<SubsectionData[]>(() => {
+    const s = saved;
+    if (s?.mortRows && !s?.fixedSubs) {
+      return [
+        { id: 'mort', label: 'Mortgage / Housing', rows: (s.mortRows as AmtRow[]) || dfMort() },
+        { id: 'auto', label: 'Auto', rows: (s.autoRows as AmtRow[]) || dfAuto() },
+        { id: 'give', label: 'Giving & Charity', rows: (s.giveRows as AmtRow[]) || dfGive() },
+        { id: 'subs', label: 'Monthly Subscriptions', rows: (s.subs as AmtRow[]) || dfSubs() },
+        { id: 'ins',  label: 'Insurance', rows: (s.insRows as AmtRow[]) || dfIns() },
+      ];
+    }
+    return (s?.fixedSubs as SubsectionData[]) ?? dfFixedSubs();
+  });
+  const [sinks, setSinks] = useState<SinkRow[]>(() => (saved?.sinks as SinkRow[]) ?? dfSinks());
+  const [sinksLabel, setSinksLabel] = useState<string>(() => (saved?.sinksLabel as string) ?? 'Sinking Funds');
 
-  /* Section D */
-  const [spending,   setSpending]   = useState<AmtRow[]>(() => (saved?.spending   as AmtRow[]) ?? dfSpending());
-  const [neededRows, setNeededRows] = useState<AmtRow[]>(() => (saved?.neededRows as AmtRow[]) ?? dfNeeded());
+  /* Section D — dynamic subsections */
+  const [varSubs, setVarSubs] = useState<SubsectionData[]>(() => {
+    const s = saved;
+    if (s?.spending && !s?.varSubs) {
+      return [
+        { id: 'spend',  label: 'Discretionary Spending', rows: (s.spending as AmtRow[]) || dfSpending() },
+        { id: 'needed', label: 'Necessities & Utilities', rows: (s.neededRows as AmtRow[]) || dfNeeded() },
+      ];
+    }
+    return (s?.varSubs as SubsectionData[]) ?? dfVarSubs();
+  });
 
   /* Section E */
   const [savings, setSavings] = useState<AmtRow[]>(() => (saved?.savings as AmtRow[]) ?? dfSavings());
 
-  /* ── Download dropdown (click-based) ─────────────────────────────────── */
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  /* ── Undo stack ────────────────────────────────────────────────────────── */
+  const [undoStack, setUndoStack] = useState<BudgetUndoSnapshot[]>([]);
+
+  const pushUndo = useCallback(() => {
+    setUndoStack(prev => [...prev.slice(-19), {
+      fixedSubs, varSubs, sinks, sinksLabel, savings, incRows, assets, debts, timestamp: Date.now()
+    }]);
+  }, [fixedSubs, varSubs, sinks, sinksLabel, savings, incRows, assets, debts]);
+
+  const handleUndo = (toIndex?: number) => {
+    setUndoStack(prev => {
+      const idx = toIndex ?? prev.length - 1;
+      if (idx < 0 || idx >= prev.length) return prev;
+      const snap = prev[idx];
+      setFixedSubs(snap.fixedSubs);
+      setVarSubs(snap.varSubs);
+      setSinks(snap.sinks);
+      setSinksLabel(snap.sinksLabel);
+      setSavings(snap.savings);
+      setIncRows(snap.incRows);
+      setAssets(snap.assets);
+      setDebts(snap.debts);
+      return prev.slice(0, idx);
+    });
+  };
+
+  /* ── Row selection + bulk actions ────────────────────────────────────── */
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const [pendingMove, setPendingMove] = useState(false);
+
+  const handleBulkDelete = () => {
+    pushUndo();
+    setFixedSubs(prev => prev.map(sub => ({
+      ...sub,
+      rows: sub.rows.filter(r => !selectedKeys.has(`fixed:${sub.id}:${r.id}`))
+    })));
+    setVarSubs(prev => prev.map(sub => ({
+      ...sub,
+      rows: sub.rows.filter(r => !selectedKeys.has(`var:${sub.id}:${r.id}`))
+    })));
+    setSavings(prev => prev.filter(r => !selectedKeys.has(`savings:savings:${r.id}`)));
+    setIncRows(prev => prev.filter(r => !selectedKeys.has(`income:income:${r.id}`)));
+    setSelectedKeys(new Set());
+  };
+
+  const handleMoveToSub = (targetSubId: string, targetSectionType: 'fixed' | 'var' | 'savings') => {
+    pushUndo();
+    // Collect selected rows
+    const collected: AmtRow[] = [];
+    // From fixedSubs
+    setFixedSubs(prev => prev.map(sub => {
+      const toMove = sub.rows.filter(r => selectedKeys.has(`fixed:${sub.id}:${r.id}`));
+      collected.push(...toMove);
+      return { ...sub, rows: sub.rows.filter(r => !selectedKeys.has(`fixed:${sub.id}:${r.id}`)) };
+    }));
+    // From varSubs
+    setVarSubs(prev => prev.map(sub => {
+      const toMove = sub.rows.filter(r => selectedKeys.has(`var:${sub.id}:${r.id}`));
+      collected.push(...toMove);
+      return { ...sub, rows: sub.rows.filter(r => !selectedKeys.has(`var:${sub.id}:${r.id}`)) };
+    }));
+    // From savings
+    const savingsToMove = savings.filter(r => selectedKeys.has(`savings:savings:${r.id}`));
+    collected.push(...savingsToMove);
+    setSavings(prev => prev.filter(r => !selectedKeys.has(`savings:savings:${r.id}`)));
+    // From incRows
+    const incToMove = incRows.filter(r => selectedKeys.has(`income:income:${r.id}`));
+    collected.push(...incToMove);
+    setIncRows(prev => prev.filter(r => !selectedKeys.has(`income:income:${r.id}`)));
+
+    // Add collected to target
+    if (targetSectionType === 'fixed') {
+      setFixedSubs(prev => prev.map(sub =>
+        sub.id === targetSubId ? { ...sub, rows: [...sub.rows, ...collected] } : sub
+      ));
+    } else if (targetSectionType === 'var') {
+      setVarSubs(prev => prev.map(sub =>
+        sub.id === targetSubId ? { ...sub, rows: [...sub.rows, ...collected] } : sub
+      ));
+    } else if (targetSectionType === 'savings') {
+      setSavings(prev => [...prev, ...collected]);
+    }
+
+    setSelectedKeys(new Set());
+    setPendingMove(false);
+  };
+
+  /* ── Drag and drop refs ──────────────────────────────────────────────── */
+  const dragItem = useRef<{ sectionType: string; subId: string; rowId: string } | null>(null);
+  const dragOverItem = useRef<{ sectionType: string; subId: string; rowId: string } | null>(null);
+
+  const handleDropMove = useCallback((fromSectionType: string, fromSubId: string, rowId: string, toSectionType: string, toSubId: string) => {
+    // Find the row
+    let movedRow: AmtRow | undefined;
+    if (fromSectionType === 'fixed') {
+      const sub = fixedSubs.find(s => s.id === fromSubId);
+      movedRow = sub?.rows.find(r => r.id === rowId);
+      if (movedRow) setFixedSubs(prev => prev.map(s => s.id === fromSubId ? { ...s, rows: s.rows.filter(r => r.id !== rowId) } : s));
+    } else if (fromSectionType === 'var') {
+      const sub = varSubs.find(s => s.id === fromSubId);
+      movedRow = sub?.rows.find(r => r.id === rowId);
+      if (movedRow) setVarSubs(prev => prev.map(s => s.id === fromSubId ? { ...s, rows: s.rows.filter(r => r.id !== rowId) } : s));
+    }
+    if (!movedRow) return;
+    const row = movedRow;
+    if (toSectionType === 'fixed') {
+      setFixedSubs(prev => prev.map(s => s.id === toSubId ? { ...s, rows: [...s.rows, row] } : s));
+    } else if (toSectionType === 'var') {
+      setVarSubs(prev => prev.map(s => s.id === toSubId ? { ...s, rows: [...s.rows, row] } : s));
+    }
+  }, [fixedSubs, varSubs]);
+
+  /* ── Save/Print and Undo dropdowns ───────────────────────────────────── */
+  const [savePrintOpen, setSavePrintOpen] = useState(false);
+  const [undoMenuOpen, setUndoMenuOpen] = useState(false);
+  const savePrintRef = useRef<HTMLDivElement>(null);
+  const undoMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handle(e: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setDropdownOpen(false);
-      }
+      if (savePrintRef.current && !savePrintRef.current.contains(e.target as Node)) setSavePrintOpen(false);
+      if (undoMenuRef.current && !undoMenuRef.current.contains(e.target as Node)) setUndoMenuOpen(false);
     }
     document.addEventListener('mousedown', handle);
     return () => document.removeEventListener('mousedown', handle);
   }, []);
 
   /* ── Month comparison state ───────────────────────────────────────────── */
-  const [months,             setMonths]             = useState<MonthData[]>(() => loadMonths());
-  const [activeMonthIdx,     setActiveMonthIdx]     = useState(0);
-  const [showMonthView,      setShowMonthView]      = useState(false);
-  const [showStartMonthModal,setShowStartMonthModal]= useState(false);
+  const [months,        setMonths]        = useState<MonthData[]>(() => loadMonths());
+  const [showMonthView, setShowMonthView] = useState(false);
 
   /* ── Auto-save budget to localStorage on every state change ─────────── */
   useEffect(() => {
     localStorage.setItem(LS_KEY, JSON.stringify({
-      open, assets, debts, incRows, mortRows, autoRows, giveRows,
-      subs, insRows, sinks, spending, neededRows, savings,
+      open, assets, debts, incRows, fixedSubs, sinks, sinksLabel, varSubs, savings,
     }));
-  }, [open, assets, debts, incRows, mortRows, autoRows, giveRows,
-      subs, insRows, sinks, spending, neededRows, savings]);
+  }, [open, assets, debts, incRows, fixedSubs, sinks, sinksLabel, varSubs, savings]);
 
   /* ── Auto-save months to localStorage ────────────────────────────────── */
   useEffect(() => {
@@ -687,25 +1122,36 @@ export default function BudgetPlanner() {
 
   /* ── Cloud save / load ────────────────────────────────────────────────── */
   const getBudgetSnapshot = useCallback(() => ({
-    open, assets, debts, incRows, mortRows, autoRows, giveRows,
-    subs, insRows, sinks, spending, neededRows, savings,
-  }), [open, assets, debts, incRows, mortRows, autoRows, giveRows,
-       subs, insRows, sinks, spending, neededRows, savings]);
+    open, assets, debts, incRows, fixedSubs, sinks, sinksLabel, varSubs, savings,
+  }), [open, assets, debts, incRows, fixedSubs, sinks, sinksLabel, varSubs, savings]);
 
   const applySnapshot = useCallback((snap: Record<string, unknown>) => {
     if (snap.open)       setOpen(snap.open as Record<string, boolean>);
     if (snap.assets)     setAssets(snap.assets as NVRow[]);
     if (snap.debts)      setDebts(snap.debts as NVRow[]);
     if (snap.incRows)    setIncRows(snap.incRows as AmtRow[]);
-    if (snap.mortRows)   setMortRows(snap.mortRows as AmtRow[]);
-    if (snap.autoRows)   setAutoRows(snap.autoRows as AmtRow[]);
-    if (snap.giveRows)   setGiveRows(snap.giveRows as AmtRow[]);
-    if (snap.subs)       setSubs(snap.subs as AmtRow[]);
-    if (snap.insRows)    setInsRows(snap.insRows as AmtRow[]);
     if (snap.sinks)      setSinks(snap.sinks as SinkRow[]);
-    if (snap.spending)   setSpending(snap.spending as AmtRow[]);
-    if (snap.neededRows) setNeededRows(snap.neededRows as AmtRow[]);
+    if (snap.sinksLabel) setSinksLabel(snap.sinksLabel as string);
     if (snap.savings)    setSavings(snap.savings as AmtRow[]);
+    // Migration: old format → new format
+    if (snap.mortRows && !snap.fixedSubs) {
+      const migrated: SubsectionData[] = [
+        { id: 'mort', label: 'Mortgage / Housing', rows: (snap.mortRows as AmtRow[]) || dfMort() },
+        { id: 'auto', label: 'Auto', rows: (snap.autoRows as AmtRow[]) || dfAuto() },
+        { id: 'give', label: 'Giving & Charity', rows: (snap.giveRows as AmtRow[]) || dfGive() },
+        { id: 'subs', label: 'Monthly Subscriptions', rows: (snap.subs as AmtRow[]) || dfSubs() },
+        { id: 'ins',  label: 'Insurance', rows: (snap.insRows as AmtRow[]) || dfIns() },
+      ];
+      setFixedSubs(migrated);
+      const migratedVar: SubsectionData[] = [
+        { id: 'spend',  label: 'Discretionary Spending', rows: (snap.spending as AmtRow[]) || dfSpending() },
+        { id: 'needed', label: 'Necessities & Utilities', rows: (snap.neededRows as AmtRow[]) || dfNeeded() },
+      ];
+      setVarSubs(migratedVar);
+    } else {
+      if (snap.fixedSubs) setFixedSubs(snap.fixedSubs as SubsectionData[]);
+      if (snap.varSubs)   setVarSubs(snap.varSubs as SubsectionData[]);
+    }
   }, []);
 
   // Load cloud data when user signs in
@@ -722,6 +1168,27 @@ export default function BudgetPlanner() {
         }
       });
   }, [user, applySnapshot]);
+
+  // Load this month's transaction totals by category name (for budget indicators)
+  const [txByCat, setTxByCat] = useState<Record<string, { count: number; total: number }>>({});
+  useEffect(() => {
+    if (!user) return;
+    const now = new Date();
+    Promise.all([
+      getUserTransactions(user.id, now.getFullYear(), now.getMonth() + 1),
+      getGlobalCategories(),
+    ]).then(([txs, cats]) => {
+      const byName: Record<string, { count: number; total: number }> = {};
+      for (const tx of txs) {
+        const cat = cats.find(c => c.id === tx.resolved_category_id);
+        if (!cat) continue;
+        if (!byName[cat.name]) byName[cat.name] = { count: 0, total: 0 };
+        byName[cat.name].count++;
+        byName[cat.name].total += Number(tx.amount);
+      }
+      setTxByCat(byName);
+    });
+  }, [user]);
 
   const handleSaveToAccount = async () => {
     if (!user) { openAuthModal(); return; }
@@ -742,17 +1209,11 @@ export default function BudgetPlanner() {
 
   const totalIncome  = incRows.reduce((s, r) => s + nv(r.amount), 0);
 
-  const mortTotal   = mortRows.reduce((s, r) => s + nv(r.amount), 0);
-  const autoTotal   = autoRows.reduce((s, r) => s + nv(r.amount), 0);
-  const givingTotal = giveRows.reduce((s, r) => s + nv(r.amount), 0);
-  const subsTotal   = subs.reduce((s, r) => s + nv(r.amount), 0);
-  const insTotal    = insRows.reduce((s, r) => s + nv(r.amount), 0);
-  const sinksTotal  = sinks.reduce((s, r) => s + nv(r.amount) / fdiv(r.freq), 0);
-  const totalFixed  = mortTotal + autoTotal + givingTotal + subsTotal + insTotal + sinksTotal;
+  const fixedSubsTotal = fixedSubs.reduce((s, sub) => s + sub.rows.reduce((r2, row) => r2 + nv(row.amount), 0), 0);
+  const sinksTotal     = sinks.reduce((s, r) => s + nv(r.amount) / fdiv(r.freq), 0);
+  const totalFixed     = fixedSubsTotal + sinksTotal;
 
-  const spendTotal  = spending.reduce((s, r) => s + nv(r.amount), 0);
-  const neededTotal = neededRows.reduce((s, r) => s + nv(r.amount), 0);
-  const totalVar    = spendTotal + neededTotal;
+  const totalVar = varSubs.reduce((s, sub) => s + sub.rows.reduce((r2, row) => r2 + nv(row.amount), 0), 0);
 
   const totalSavings  = savings.reduce((s, r) => s + nv(r.amount), 0);
   const totalExpenses = totalFixed + totalVar;
@@ -764,9 +1225,10 @@ export default function BudgetPlanner() {
     localStorage.removeItem(LS_KEY);
     setAssets(dfAssets());   setDebts(dfDebts());
     setIncRows(dfIncome());
-    setMortRows(dfMort());   setAutoRows(dfAuto());   setGiveRows(dfGive());
-    setSubs(dfSubs());       setInsRows(dfIns());     setSinks(dfSinks());
-    setSpending(dfSpending()); setNeededRows(dfNeeded());
+    setFixedSubs(dfFixedSubs());
+    setSinks(dfSinks());
+    setSinksLabel('Sinking Funds');
+    setVarSubs(dfVarSubs());
     setSavings(dfSavings());
     setOpen({ A: true, B: true, C: false, D: false, E: false });
   };
@@ -788,15 +1250,33 @@ export default function BudgetPlanner() {
         bucket[key].push({ id: uid(), name: item.name, amount: String(item.amount) });
       }
     }
-    if (bucket.income.length)        setIncRows(p => [...p, ...bucket.income]);
-    if (bucket.mortgage.length)      setMortRows(p => [...p, ...bucket.mortgage]);
-    if (bucket.auto.length)          setAutoRows(p => [...p, ...bucket.auto]);
-    if (bucket.giving.length)        setGiveRows(p => [...p, ...bucket.giving]);
-    if (bucket.subscriptions.length) setSubs(p => [...p, ...bucket.subscriptions]);
-    if (bucket.insurance.length)     setInsRows(p => [...p, ...bucket.insurance]);
-    if (bucket.spending.length)      setSpending(p => [...p, ...bucket.spending]);
-    if (bucket.needed.length)        setNeededRows(p => [...p, ...bucket.needed]);
-    if (bucket.savings.length)       setSavings(p => [...p, ...bucket.savings]);
+    if (bucket.income.length) setIncRows(p => [...p, ...bucket.income]);
+    // Map to fixedSubs by sub id
+    const fixedMap: Record<string, AmtRow[]> = {
+      mort: bucket.mortgage,
+      auto: bucket.auto,
+      give: bucket.giving,
+      subs: bucket.subscriptions,
+      ins:  bucket.insurance,
+    };
+    if (Object.values(fixedMap).some(v => v.length > 0)) {
+      setFixedSubs(prev => prev.map(sub => {
+        const toAdd = fixedMap[sub.id] ?? [];
+        return toAdd.length > 0 ? { ...sub, rows: [...sub.rows, ...toAdd] } : sub;
+      }));
+    }
+    // Map to varSubs
+    const varMap: Record<string, AmtRow[]> = {
+      spend:  bucket.spending,
+      needed: bucket.needed,
+    };
+    if (Object.values(varMap).some(v => v.length > 0)) {
+      setVarSubs(prev => prev.map(sub => {
+        const toAdd = varMap[sub.id] ?? [];
+        return toAdd.length > 0 ? { ...sub, rows: [...sub.rows, ...toAdd] } : sub;
+      }));
+    }
+    if (bucket.savings.length) setSavings(p => [...p, ...bucket.savings]);
     setOpen(p => ({ ...p, B: true, C: true, D: true, E: true }));
   };
 
@@ -850,27 +1330,14 @@ export default function BudgetPlanner() {
     // FIXED MONTHLY COSTS
     addSectionHeader('FIXED MONTHLY COSTS');
     data.push(makeRow('Checking Account', 'Total Fixed Monthly', totalFixed));
-    data.push(makeRow('', 'Total Mortgage', mortTotal));
-    for (const r of mortRows) {
-      data.push(makeRow('', r.name, nv(r.amount), r.id));
+    for (const sub of fixedSubs) {
+      const subTotal = sub.rows.reduce((s, r) => s + nv(r.amount), 0);
+      data.push(makeRow('', sub.label, subTotal));
+      for (const r of sub.rows) {
+        data.push(makeRow('', r.name, nv(r.amount), r.id));
+      }
     }
-    data.push(makeRow('', 'Total Auto', autoTotal));
-    for (const r of autoRows) {
-      data.push(makeRow('', r.name, nv(r.amount), r.id));
-    }
-    data.push(makeRow('', 'Gifts & Charity', givingTotal));
-    for (const r of giveRows) {
-      data.push(makeRow('', r.name, nv(r.amount), r.id));
-    }
-    data.push(makeRow('', 'Subscriptions', subsTotal));
-    for (const r of subs) {
-      data.push(makeRow('', r.name, nv(r.amount), r.id));
-    }
-    data.push(makeRow('', 'Insurance', insTotal));
-    for (const r of insRows) {
-      data.push(makeRow('', r.name, nv(r.amount), r.id));
-    }
-    data.push(makeRow('', 'Sinking Funds', sinksTotal));
+    data.push(makeRow('', sinksLabel, sinksTotal));
     for (const r of sinks) {
       const freqLabel = FREQS.find(f => f.val === r.freq)?.label ?? r.freq;
       data.push(makeRow(freqLabel, r.name, Math.round(nv(r.amount) / fdiv(r.freq)), r.id));
@@ -879,13 +1346,12 @@ export default function BudgetPlanner() {
     // FLUCTUATING COSTS
     addSectionHeader('FLUCTUATING COSTS');
     data.push(makeRow('', 'Total Fluctuating', totalVar));
-    data.push(makeRow('', 'Discretionary', spendTotal));
-    for (const r of spending) {
-      data.push(makeRow('', r.name, nv(r.amount), r.id));
-    }
-    data.push(makeRow('', 'Necessities', neededTotal));
-    for (const r of neededRows) {
-      data.push(makeRow('', r.name, nv(r.amount), r.id));
+    for (const sub of varSubs) {
+      const subTotal = sub.rows.reduce((s, r) => s + nv(r.amount), 0);
+      data.push(makeRow('', sub.label, subTotal));
+      for (const r of sub.rows) {
+        data.push(makeRow('', r.name, nv(r.amount), r.id));
+      }
     }
 
     // SAVINGS
@@ -915,60 +1381,55 @@ export default function BudgetPlanner() {
   };
 
   /* ── Download as Excel / ODS ──────────────────────────────────────────── */
-  const handleDownload = (format: 'xlsx' | 'ods') => {
-    setDropdownOpen(false);
+  const handleDownload = (format: 'xlsx' | 'ods' = 'xlsx') => {
+    setSavePrintOpen(false);
     XLSX.writeFile(buildWorkbook(), `monthly-budget.${format}`);
   };
 
-  /* ── Month comparison handlers ────────────────────────────────────────── */
-  const handleStartMonth = (label: string) => {
-    const newMonth: MonthData = { label, actuals: {} };
-    setMonths([newMonth]);
-    setActiveMonthIdx(0);
-    setShowStartMonthModal(false);
-    setShowMonthView(true);
-  };
 
-  const handleNextMonth = () => {
-    const currentLabel = months[activeMonthIdx].label;
-    const nextLabel = nextMonthLabel(currentLabel);
-    const existingIdx = months.findIndex(m => m.label === nextLabel);
-    if (existingIdx >= 0) {
-      setActiveMonthIdx(existingIdx);
-    } else {
-      const newIdx = months.length;
-      setMonths(prev => [...prev, { label: nextLabel, actuals: {} }]);
-      setActiveMonthIdx(newIdx);
-    }
+  /* ── Relative time helper for undo dropdown ───────────────────────────── */
+  const relTime = (ts: number) => {
+    const diff = Math.floor((Date.now() - ts) / 1000);
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
+    return `${Math.floor(diff / 3600)} hr ago`;
   };
-
-  /* ── Import section open/closed ───────────────────────────────────────── */
-  const [importOpen, setImportOpen] = useState(false);
 
   /* ── Comparison view — full-page replacement ─────────────────────────── */
-  if (showMonthView && months.length > 0) {
+  if (showMonthView) {
     return (
       <MonthComparisonView
         incRows={incRows}
-        mortRows={mortRows}
-        autoRows={autoRows}
-        giveRows={giveRows}
-        subs={subs}
-        insRows={insRows}
+        fixedSubs={fixedSubs}
+        varSubs={varSubs}
         sinks={sinks}
-        spending={spending}
-        neededRows={neededRows}
+        sinksLabel={sinksLabel}
         savings={savings}
         totalIncome={totalIncome}
         totalFixed={totalFixed}
         totalVar={totalVar}
         totalSavings={totalSavings}
         months={months}
-        activeMonthIdx={activeMonthIdx}
-        setActiveMonthIdx={setActiveMonthIdx}
         setMonths={setMonths}
         onBack={() => setShowMonthView(false)}
-        onNextMonth={handleNextMonth}
+        onAddFixedSub={label => {
+          pushUndo();
+          setFixedSubs(prev => [...prev, { id: uid(), label, rows: [] }]);
+        }}
+        onAddVarSub={label => {
+          pushUndo();
+          setVarSubs(prev => [...prev, { id: uid(), label, rows: [] }]);
+        }}
+        onSave={handleSaveToAccount}
+        onImport={() => {
+          setShowMonthView(false);
+          setTimeout(() => {
+            setOpen(p => ({ ...p, _import: true }));
+            document.getElementById('import-section')?.scrollIntoView({ behavior: 'smooth' });
+          }, 50);
+        }}
+        onUndo={handleUndo}
+        undoStack={undoStack}
       />
     );
   }
@@ -989,106 +1450,138 @@ export default function BudgetPlanner() {
         </div>
         <div className="flex gap-2 flex-shrink-0 flex-wrap">
 
-          {/* Save to account */}
-          <button
-            onClick={handleSaveToAccount}
-            disabled={saveStatus === 'saving'}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 ${
-              saveStatus === 'saved'
-                ? 'bg-green-100 border border-green-300 text-green-700'
-                : saveStatus === 'error'
-                ? 'bg-red-100 border border-red-300 text-red-600'
-                : 'bg-primary-600 text-white hover:bg-primary-700'
-            }`}
-          >
-            {saveStatus === 'saved' ? (
-              <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                Saved!
-              </>
-            ) : saveStatus === 'error' ? (
-              'Error — try again'
-            ) : saveStatus === 'saving' ? (
-              'Saving…'
-            ) : (
-              <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-                </svg>
-                {user ? 'Save' : 'Save to Account'}
-              </>
-            )}
-          </button>
-
-          {/* Download dropdown — click-based */}
-          <div className="relative" ref={dropdownRef}>
+          {/* Save / Print dropdown */}
+          <div className="relative" ref={savePrintRef}>
             <button
-              onClick={() => setDropdownOpen(p => !p)}
-              className="flex items-center gap-1.5 px-3 py-2 border border-primary-300 rounded-lg text-primary-700 hover:bg-primary-50 text-xs font-semibold transition-colors"
+              onClick={() => setSavePrintOpen(p => !p)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                saveStatus === 'saved'
+                  ? 'bg-green-100 border border-green-300 text-green-700'
+                  : saveStatus === 'error'
+                  ? 'bg-red-100 border border-red-300 text-red-600'
+                  : 'bg-primary-600 text-white hover:bg-primary-700'
+              }`}
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-              Download
-              <svg className="w-3 h-3 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
+              {saveStatus === 'saved' ? (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Saved!
+                </>
+              ) : saveStatus === 'error' ? (
+                'Error — try again'
+              ) : saveStatus === 'saving' ? (
+                'Saving…'
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                  </svg>
+                  Save / Print
+                  <svg className="w-3 h-3 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </>
+              )}
             </button>
-            <div className={`absolute right-0 top-full mt-1 bg-white border border-secondary-200 rounded-lg shadow-lg py-1 z-30 min-w-[140px] ${dropdownOpen ? 'block' : 'hidden'}`}>
-              <button
-                onClick={() => handleDownload('xlsx')}
-                className="w-full text-left px-4 py-2 text-xs text-secondary-700 hover:bg-secondary-50 font-medium"
-              >
-                Excel (.xlsx)
-              </button>
-              <button
-                onClick={() => handleDownload('ods')}
-                className="w-full text-left px-4 py-2 text-xs text-secondary-700 hover:bg-secondary-50 font-medium"
-              >
-                OpenDocument (.ods)
-              </button>
-            </div>
+            {savePrintOpen && (
+              <div className="absolute right-0 top-full mt-1 bg-white border border-secondary-200 rounded-lg shadow-lg py-1 z-30 min-w-[180px]">
+                <button
+                  onClick={() => { handleSaveToAccount(); setSavePrintOpen(false); }}
+                  className="w-full text-left px-4 py-2 text-xs text-secondary-700 hover:bg-secondary-50 font-medium"
+                >
+                  {user ? 'Save to account' : 'Sign in to save'}
+                </button>
+                <div className="border-t border-secondary-100 my-1" />
+                <button
+                  onClick={() => { handlePrint(); setSavePrintOpen(false); }}
+                  className="w-full text-left px-4 py-2 text-xs text-secondary-700 hover:bg-secondary-50 font-medium"
+                >
+                  Print
+                </button>
+                <div className="border-t border-secondary-100 my-1" />
+                <button
+                  onClick={() => handleDownload('xlsx')}
+                  className="w-full text-left px-4 py-2 text-xs text-secondary-700 hover:bg-secondary-50 font-medium"
+                >
+                  Download .xlsx
+                </button>
+                <button
+                  onClick={() => handleDownload('ods')}
+                  className="w-full text-left px-4 py-2 text-xs text-secondary-700 hover:bg-secondary-50 font-medium"
+                >
+                  Download .ods
+                </button>
+              </div>
+            )}
           </div>
 
+          {/* Import button */}
           <button
-            onClick={handlePrint}
+            onClick={() => {
+              setOpen(p => ({ ...p, _import: true }));
+              document.getElementById('import-section')?.scrollIntoView({ behavior: 'smooth' });
+            }}
             className="flex items-center gap-1.5 px-3 py-2 border border-secondary-300 rounded-lg text-secondary-600 hover:bg-secondary-100 text-xs font-semibold transition-colors"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
             </svg>
-            Print
+            Import
           </button>
-          <button
-            onClick={handleReset}
-            className="flex items-center gap-1.5 px-3 py-2 border border-red-200 rounded-lg text-red-500 hover:bg-red-50 text-xs font-semibold transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            Reset
-          </button>
+
+          {/* Undo dropdown */}
+          <div className="relative" ref={undoMenuRef}>
+            <button
+              onClick={() => setUndoMenuOpen(p => !p)}
+              className={`flex items-center gap-1.5 px-3 py-2 border border-secondary-300 rounded-lg text-secondary-600 hover:bg-secondary-100 text-xs font-semibold transition-colors ${undoStack.length === 0 ? 'opacity-40' : ''}`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6M3 10l6-6" />
+              </svg>
+              Undo
+              <svg className="w-3 h-3 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {undoMenuOpen && (
+              <div className="absolute right-0 top-full mt-1 bg-white border border-secondary-200 rounded-lg shadow-lg py-1 z-30 min-w-[220px]">
+                {undoStack.length === 0 ? (
+                  <span className="block px-4 py-2 text-xs text-secondary-400">Nothing to undo</span>
+                ) : (
+                  [...undoStack].reverse().slice(0, 5).map((snap, i) => {
+                    const realIdx = undoStack.length - 1 - i;
+                    return (
+                      <button
+                        key={realIdx}
+                        onClick={() => { handleUndo(realIdx); setUndoMenuOpen(false); }}
+                        className="w-full text-left px-4 py-2 text-xs text-secondary-700 hover:bg-secondary-50 font-medium"
+                      >
+                        Step {realIdx + 1} — {relTime(snap.timestamp)}
+                      </button>
+                    );
+                  })
+                )}
+                <div className="border-t border-secondary-100 my-1" />
+                <button
+                  onClick={() => { handleReset(); setUndoMenuOpen(false); }}
+                  className="w-full text-left px-4 py-2 text-xs text-red-500 hover:bg-red-50 font-medium"
+                >
+                  Total Reset
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Start Month modal */}
-      {showStartMonthModal && (
-        <StartMonthModal
-          onConfirm={handleStartMonth}
-          onCancel={() => setShowStartMonthModal(false)}
-        />
-      )}
-
       {/* ── Import from Bank Statements ───────────────────────────────────── */}
-      <div data-noprint className="bg-white rounded-xl shadow-sm border border-secondary-200 overflow-hidden mb-4">
+      <div id="import-section" data-noprint className="bg-white rounded-xl shadow-sm border border-secondary-200 overflow-hidden mb-4">
         <button
-          onClick={() => setImportOpen(p => !p)}
+          onClick={() => setOpen(p => ({ ...p, _import: !p._import }))}
           className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-secondary-50 transition-colors focus:outline-none"
         >
           <div className="flex items-center gap-3">
@@ -1106,13 +1599,13 @@ export default function BudgetPlanner() {
             </div>
           </div>
           <svg
-            className={`w-5 h-5 text-secondary-400 transform transition-transform duration-200 flex-shrink-0 ml-4 ${importOpen ? 'rotate-180' : ''}`}
+            className={`w-5 h-5 text-secondary-400 transform transition-transform duration-200 flex-shrink-0 ml-4 ${open._import ? 'rotate-180' : ''}`}
             fill="none" stroke="currentColor" viewBox="0 0 24 24"
           >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
         </button>
-        {importOpen && (
+        {open._import && (
           <div className="px-5 pb-6 border-t border-secondary-100 pt-4">
             <StatementImporter onApply={handleApplyTransactions} />
           </div>
@@ -1155,7 +1648,20 @@ export default function BudgetPlanner() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <p className={subHdr}>Monthly Take-Home Pay</p>
-            <AmtRowList rows={incRows} setRows={setIncRows} addLabel="Add Income Source" />
+            <AmtRowList
+              rows={incRows}
+              setRows={setIncRows}
+              addLabel="Add Income Source"
+              sectionKey="income:income"
+              selectedKeys={selectedKeys}
+              onToggleSelect={key => setSelectedKeys(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; })}
+              pendingMove={pendingMove}
+              onMoveHere={() => handleMoveToSub('income', 'savings')}
+              onPushUndo={pushUndo}
+              dragItem={dragItem}
+              dragOverItem={dragOverItem}
+              onDropReorder={rows => setIncRows(rows)}
+            />
             <SubTotal label="Total Income" amount={totalIncome} />
           </div>
           <div>
@@ -1193,48 +1699,59 @@ export default function BudgetPlanner() {
         badge={totalFixed > 0 ? `${fmt(totalFixed)}/mo` : undefined}
         isOpen={open.C} onToggle={() => tog('C')}
       >
-        <div className={subGrp}>
-          <p className={subHdr}>Mortgage / Housing</p>
-          <AmtRowList rows={mortRows} setRows={setMortRows} addLabel="Add Row" />
-          <SubTotal label="Mortgage Subtotal" amount={mortTotal} />
-        </div>
+        {/* Dynamic subsections */}
+        {fixedSubs.map(sub => {
+          const subTotal = sub.rows.reduce((s, r) => s + nv(r.amount), 0);
+          return (
+            <div key={sub.id} className={subGrp}>
+              <EditableSubHeader
+                label={sub.label}
+                onLabelChange={newLabel => {
+                  pushUndo();
+                  setFixedSubs(prev => prev.map(s => s.id === sub.id ? { ...s, label: newLabel } : s));
+                }}
+                onDelete={() => {
+                  if (sub.rows.length > 0 && !window.confirm(`Delete "${sub.label}" and its ${sub.rows.length} row(s)?`)) return;
+                  pushUndo();
+                  setFixedSubs(prev => prev.filter(s => s.id !== sub.id));
+                }}
+                extraNote={sub.id === 'give' ? '— bi-weekly? enter amount × 2.17 for monthly' : undefined}
+              />
+              <AmtRowList
+                rows={sub.rows}
+                setRows={rows => setFixedSubs(prev => prev.map(s => s.id === sub.id ? { ...s, rows } : s))}
+                addLabel="Add Row"
+                sectionKey={`fixed:${sub.id}`}
+                selectedKeys={selectedKeys}
+                onToggleSelect={key => setSelectedKeys(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; })}
+                pendingMove={pendingMove}
+                onMoveHere={() => handleMoveToSub(sub.id, 'fixed')}
+                onPushUndo={pushUndo}
+                dragItem={dragItem}
+                dragOverItem={dragOverItem}
+                onDropReorder={rows => setFixedSubs(prev => prev.map(s => s.id === sub.id ? { ...s, rows } : s))}
+                onDropMove={(fromSectionType, fromSubId, rowId) =>
+                  handleDropMove(fromSectionType, fromSubId, rowId, 'fixed', sub.id)
+                }
+              />
+              <TxIndicator budgeted={subTotal} categoryNames={getTxCategories(sub.label)} txByCat={txByCat} />
+              <SubTotal label={`${sub.label} Subtotal`} amount={subTotal} />
+            </div>
+          );
+        })}
 
+        {/* Sinking Funds (special — has editable label + frequency selectors) */}
         <div className={subGrp}>
-          <p className={subHdr}>Auto</p>
-          <AmtRowList rows={autoRows} setRows={setAutoRows} addLabel="Add Row" />
-          <SubTotal label="Auto Subtotal" amount={autoTotal} />
-        </div>
-
-        <div className={subGrp}>
-          <p className={subHdr}>
-            Giving &amp; Charity
-            <span className="ml-2 font-normal normal-case tracking-normal text-secondary-400">
-              — bi-weekly? enter amount × 2.17 for monthly
-            </span>
-          </p>
-          <AmtRowList rows={giveRows} setRows={setGiveRows} addLabel="Add Row" />
-          <SubTotal label="Giving Subtotal" amount={givingTotal} />
-        </div>
-
-        <div className={subGrp}>
-          <p className={subHdr}>Monthly Subscriptions</p>
-          <AmtRowList rows={subs} setRows={setSubs} addLabel="Add Subscription" />
-          <SubTotal label="Subscriptions Subtotal" amount={subsTotal} />
-        </div>
-
-        <div className={subGrp}>
-          <p className={subHdr}>Insurance</p>
-          <AmtRowList rows={insRows} setRows={setInsRows} addLabel="Add Insurance" />
-          <SubTotal label="Insurance Subtotal" amount={insTotal} />
-        </div>
-
-        <div className={subGrp}>
-          <p className={subHdr}>
-            Sinking Funds
-            <span className="ml-2 font-normal normal-case tracking-normal text-secondary-400">
-              — irregular bills averaged to a monthly amount
-            </span>
-          </p>
+          <EditableSubHeader
+            label={sinksLabel}
+            onLabelChange={newLabel => { pushUndo(); setSinksLabel(newLabel); }}
+            onDelete={() => {
+              if (sinks.length > 0 && !window.confirm(`Delete "${sinksLabel}" and its ${sinks.length} item(s)?`)) return;
+              pushUndo();
+              setSinks([]);
+            }}
+            extraNote="— irregular bills averaged to a monthly amount"
+          />
           <div className="space-y-2">
             {sinks.map((row, i) => (
               <div key={row.id} className="flex flex-col sm:flex-row gap-2">
@@ -1263,7 +1780,7 @@ export default function BudgetPlanner() {
                     {nv(row.amount) > 0 ? `${fmt(nv(row.amount) / fdiv(row.freq))}/mo` : '—'}
                   </span>
                   <button
-                    onClick={() => setSinks(sinks.filter((_, j) => j !== i))}
+                    onClick={() => { pushUndo(); setSinks(sinks.filter((_, j) => j !== i)); }}
                     className={`${rmBtn} flex-shrink-0`}
                     title="Remove"
                   >×</button>
@@ -1271,14 +1788,28 @@ export default function BudgetPlanner() {
               </div>
             ))}
             <button
-              onClick={() => setSinks([...sinks, { id: uid(), name: '', amount: '', freq: 'monthly' }])}
+              onClick={() => { pushUndo(); setSinks([...sinks, { id: uid(), name: '', amount: '', freq: 'monthly' }]); }}
               className={addBtn}
             >
               <span className="font-bold text-base">+</span> Add Sinking Fund
             </button>
           </div>
-          <SubTotal label="Sinking Funds Subtotal (monthly equiv.)" amount={sinksTotal} />
+          <SubTotal label={`${sinksLabel} Subtotal (monthly equiv.)`} amount={sinksTotal} />
         </div>
+
+        {/* Add Subsection button */}
+        <button
+          onClick={() => {
+            const label = window.prompt('New subsection name:');
+            if (label?.trim()) {
+              pushUndo();
+              setFixedSubs(prev => [...prev, { id: uid(), label: label.trim(), rows: [] }]);
+            }
+          }}
+          className="text-primary-600 hover:text-primary-800 text-sm font-semibold flex items-center gap-1 mt-2 mb-4 transition-colors border border-dashed border-primary-300 rounded-lg px-3 py-2 w-full justify-center"
+        >
+          <span className="font-bold text-base">+</span> Add Subsection
+        </button>
 
         <SectionTotal label="Total Fixed Costs" amount={totalFixed} />
       </SectionCard>
@@ -1289,17 +1820,58 @@ export default function BudgetPlanner() {
         badge={totalVar > 0 ? `${fmt(totalVar)}/mo` : undefined}
         isOpen={open.D} onToggle={() => tog('D')}
       >
-        <div className={subGrp}>
-          <p className={subHdr}>Discretionary Spending</p>
-          <AmtRowList rows={spending} setRows={setSpending} addLabel="Add Spending Category" />
-          <SubTotal label="Spending Subtotal" amount={spendTotal} />
-        </div>
+        {varSubs.map(sub => {
+          const subTotal = sub.rows.reduce((s, r) => s + nv(r.amount), 0);
+          return (
+            <div key={sub.id} className={subGrp}>
+              <EditableSubHeader
+                label={sub.label}
+                onLabelChange={newLabel => {
+                  pushUndo();
+                  setVarSubs(prev => prev.map(s => s.id === sub.id ? { ...s, label: newLabel } : s));
+                }}
+                onDelete={() => {
+                  if (sub.rows.length > 0 && !window.confirm(`Delete "${sub.label}" and its ${sub.rows.length} row(s)?`)) return;
+                  pushUndo();
+                  setVarSubs(prev => prev.filter(s => s.id !== sub.id));
+                }}
+              />
+              <AmtRowList
+                rows={sub.rows}
+                setRows={rows => setVarSubs(prev => prev.map(s => s.id === sub.id ? { ...s, rows } : s))}
+                addLabel="Add Row"
+                sectionKey={`var:${sub.id}`}
+                selectedKeys={selectedKeys}
+                onToggleSelect={key => setSelectedKeys(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; })}
+                pendingMove={pendingMove}
+                onMoveHere={() => handleMoveToSub(sub.id, 'var')}
+                onPushUndo={pushUndo}
+                dragItem={dragItem}
+                dragOverItem={dragOverItem}
+                onDropReorder={rows => setVarSubs(prev => prev.map(s => s.id === sub.id ? { ...s, rows } : s))}
+                onDropMove={(fromSectionType, fromSubId, rowId) =>
+                  handleDropMove(fromSectionType, fromSubId, rowId, 'var', sub.id)
+                }
+              />
+              <TxIndicator budgeted={subTotal} categoryNames={getTxCategories(sub.label)} txByCat={txByCat} />
+              <SubTotal label={`${sub.label} Subtotal`} amount={subTotal} />
+            </div>
+          );
+        })}
 
-        <div className={subGrp}>
-          <p className={subHdr}>Necessities &amp; Utilities</p>
-          <AmtRowList rows={neededRows} setRows={setNeededRows} addLabel="Add Utility / Necessity" />
-          <SubTotal label="Necessities Subtotal" amount={neededTotal} />
-        </div>
+        {/* Add Subsection button */}
+        <button
+          onClick={() => {
+            const label = window.prompt('New subsection name:');
+            if (label?.trim()) {
+              pushUndo();
+              setVarSubs(prev => [...prev, { id: uid(), label: label.trim(), rows: [] }]);
+            }
+          }}
+          className="text-primary-600 hover:text-primary-800 text-sm font-semibold flex items-center gap-1 mt-2 mb-4 transition-colors border border-dashed border-primary-300 rounded-lg px-3 py-2 w-full justify-center"
+        >
+          <span className="font-bold text-base">+</span> Add Subsection
+        </button>
 
         <SectionTotal label="Total Variable Costs" amount={totalVar} />
       </SectionCard>
@@ -1313,14 +1885,28 @@ export default function BudgetPlanner() {
         <p className="text-secondary-500 text-xs italic mb-4 leading-relaxed">
           Assign a monthly amount to each bucket. These are pulled out of your leftover in the Section B summary.
         </p>
-        <AmtRowList rows={savings} setRows={setSavings} addLabel="Add Savings Bucket" />
+        <AmtRowList
+          rows={savings}
+          setRows={setSavings}
+          addLabel="Add Savings Bucket"
+          sectionKey="savings:savings"
+          selectedKeys={selectedKeys}
+          onToggleSelect={key => setSelectedKeys(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; })}
+          pendingMove={pendingMove}
+          onMoveHere={() => handleMoveToSub('savings', 'savings')}
+          onPushUndo={pushUndo}
+          dragItem={dragItem}
+          dragOverItem={dragOverItem}
+          onDropReorder={rows => setSavings(rows)}
+        />
+        <TxIndicator budgeted={totalSavings} categoryNames={['Savings']} txByCat={txByCat} />
         <SectionTotal label="Total Monthly Savings" amount={totalSavings} />
       </SectionCard>
 
       {/* ── Compare Months button ─────────────────────────────────────────── */}
       <div className="mt-6 flex justify-center">
         <button
-          onClick={() => months.length === 0 ? setShowStartMonthModal(true) : setShowMonthView(true)}
+          onClick={() => setShowMonthView(true)}
           className="flex items-center gap-2 px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-lg transition-colors"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1330,6 +1916,36 @@ export default function BudgetPlanner() {
           Compare Months
         </button>
       </div>
+
+      {/* ── Bulk action floating bar ──────────────────────────────────────── */}
+      {selectedKeys.size > 0 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 bg-secondary-800 text-white px-5 py-3 rounded-full shadow-xl">
+          <span className="text-sm font-semibold">{selectedKeys.size} selected</span>
+          {pendingMove && (
+            <span className="text-xs text-secondary-300">Click &ldquo;Move selected here&rdquo; on the target subsection</span>
+          )}
+          {!pendingMove && (
+            <button
+              onClick={() => setPendingMove(true)}
+              className="text-xs bg-primary-500 hover:bg-primary-600 px-3 py-1.5 rounded-full font-semibold transition-colors"
+            >
+              Move
+            </button>
+          )}
+          <button
+            onClick={handleBulkDelete}
+            className="text-xs bg-red-500 hover:bg-red-600 px-3 py-1.5 rounded-full font-semibold transition-colors"
+          >
+            Delete
+          </button>
+          <button
+            onClick={() => { setSelectedKeys(new Set()); setPendingMove(false); }}
+            className="text-xs text-secondary-300 hover:text-white font-semibold"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
 
     </div>
   );

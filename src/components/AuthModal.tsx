@@ -1,4 +1,6 @@
 import { useState, useEffect, FormEvent } from 'react';
+// import { useRef } from 'react';
+// import HCaptcha from '@hcaptcha/react-hcaptcha';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 
@@ -13,6 +15,8 @@ export default function AuthModal() {
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [loading, setLoading] = useState(false);
+  // const [captchaToken, setCaptchaToken] = useState<string>();
+  // const captcha = useRef<HCaptcha>(null);
 
   // Reset form when modal opens/closes or tab changes
   useEffect(() => {
@@ -58,6 +62,8 @@ export default function AuthModal() {
     setLoading(true);
     const { error: err } = await supabase.auth.signUp({ email, password });
     setLoading(false);
+    // captcha.current?.resetCaptcha();
+    // setCaptchaToken(undefined);
     if (err) { setError(err.message); return; }
     setSuccessMsg('Account created! Check your email to confirm, then sign in.');
     setTab('signin');
@@ -220,6 +226,11 @@ export default function AuthModal() {
                     autoComplete="new-password"
                   />
                 </div>
+                {/* <HCaptcha
+                  ref={captcha}
+                  sitekey={process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY!}
+                  onVerify={(token) => setCaptchaToken(token)}
+                /> */}
                 <button
                   type="submit"
                   disabled={loading}
