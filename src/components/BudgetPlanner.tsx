@@ -1237,35 +1237,37 @@ export default function BudgetPlanner() {
           </p>
           <div className="space-y-2">
             {sinks.map((row, i) => (
-              <div key={row.id} className="flex gap-2 items-center flex-wrap sm:flex-nowrap">
+              <div key={row.id} className="flex flex-col sm:flex-row gap-2">
                 <input
-                  className={`${inp} flex-1 min-w-0`}
+                  className={`${inp} w-full sm:flex-1`}
                   value={row.name}
                   onChange={e => setSinks(sinks.map((r, j) => j === i ? { ...r, name: e.target.value } : r))}
                   placeholder="Description"
                 />
-                <input
-                  className={`${inp} w-24 flex-shrink-0 text-right`}
-                  type="number" min="0"
-                  value={row.amount}
-                  onChange={e => setSinks(sinks.map((r, j) => j === i ? { ...r, amount: e.target.value } : r))}
-                  placeholder="0"
-                />
-                <select
-                  className={`${inp} w-36 flex-shrink-0`}
-                  value={row.freq}
-                  onChange={e => setSinks(sinks.map((r, j) => j === i ? { ...r, freq: e.target.value as FreqVal } : r))}
-                >
-                  {FREQS.map(f => <option key={f.val} value={f.val}>{f.label}</option>)}
-                </select>
-                <span className="text-xs text-primary-600 font-semibold w-20 flex-shrink-0 text-right">
-                  {nv(row.amount) > 0 ? `${fmt(nv(row.amount) / fdiv(row.freq))}/mo` : '—'}
-                </span>
-                <button
-                  onClick={() => setSinks(sinks.filter((_, j) => j !== i))}
-                  className={`${rmBtn} flex-shrink-0`}
-                  title="Remove"
-                >×</button>
+                <div className="flex gap-2 items-center">
+                  <input
+                    className={`${inp} w-24 flex-shrink-0 text-right`}
+                    type="number" min="0"
+                    value={row.amount}
+                    onChange={e => setSinks(sinks.map((r, j) => j === i ? { ...r, amount: e.target.value } : r))}
+                    placeholder="0"
+                  />
+                  <select
+                    className={`${inp} flex-1 sm:w-36 sm:flex-shrink-0`}
+                    value={row.freq}
+                    onChange={e => setSinks(sinks.map((r, j) => j === i ? { ...r, freq: e.target.value as FreqVal } : r))}
+                  >
+                    {FREQS.map(f => <option key={f.val} value={f.val}>{f.label}</option>)}
+                  </select>
+                  <span className="text-xs text-primary-600 font-semibold w-20 flex-shrink-0 text-right">
+                    {nv(row.amount) > 0 ? `${fmt(nv(row.amount) / fdiv(row.freq))}/mo` : '—'}
+                  </span>
+                  <button
+                    onClick={() => setSinks(sinks.filter((_, j) => j !== i))}
+                    className={`${rmBtn} flex-shrink-0`}
+                    title="Remove"
+                  >×</button>
+                </div>
               </div>
             ))}
             <button
