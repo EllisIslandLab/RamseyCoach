@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
-import Head from 'next/head';
-import { useRouter } from 'next/router';
-import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import AdminLayout from '@/components/AdminLayout';
 import type { CategorizationFlag } from '@/lib/dataService';
 import { updateFlagStatus } from '@/lib/dataService';
 
@@ -23,29 +21,11 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function AdminFlagsPage() {
-  const { user, loading } = useAuth();
-  const router = useRouter();
-
   const [flags, setFlags] = useState<CategorizationFlag[]>([]);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('pending');
   const [loadingFlags, setLoadingFlags] = useState(true);
-  const [accessDenied, setAccessDenied] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
   const [mergeNote, setMergeNote] = useState<Record<string, string>>({});
-
-  // ── Auth guard ─────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (loading) return;
-    if (!user) { router.replace('/tools'); return; }
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const role = session?.user?.app_metadata?.role;
-      if (role !== 'admin') {
-        setAccessDenied(true);
-        router.replace('/tools');
-      }
-    });
-  }, [user, loading, router]);
 
   // ── Load flags via API route ───────────────────────────────────────────────
   const loadFlags = async () => {
@@ -70,9 +50,9 @@ export default function AdminFlagsPage() {
   };
 
   useEffect(() => {
-    if (user && !accessDenied) loadFlags();
+    loadFlags();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, statusFilter, accessDenied]);
+  }, [statusFilter]);
 
   const handleAction = async (id: string, status: string, notes?: string) => {
     setActionId(id);
@@ -85,24 +65,10 @@ export default function AdminFlagsPage() {
   const pending  = flags.filter(f => f.status === 'pending').length;
   const approved = flags.filter(f => f.status === 'approved').length;
 
-  if (loading || accessDenied) return null;
-
   return (
-    <>
-      <Head>
-        <title>Admin: Categorization Flags | Money-Willo</title>
-        <meta name="robots" content="noindex" />
-      </Head>
-
-      <div className="min-h-screen bg-secondary-50">
-        <div className="bg-primary-700 text-white py-6 px-4">
-          <div className="max-w-5xl mx-auto">
-            <h1 className="text-2xl font-bold">Categorization Flags</h1>
-            <p className="text-primary-200 text-sm mt-1">Admin review portal</p>
-          </div>
-        </div>
-
-        <div className="max-w-5xl mx-auto px-4 py-8">
+    <AdminLayout title="Category Flags">
+      <div className="px-6 py-8 max-w-5xl">
+        <h1 className="text-2xl font-bold text-secondary-800 mb-6">Category Flags</h1>
 
           {/* Summary */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
@@ -240,7 +206,6 @@ export default function AdminFlagsPage() {
             )}
           </div>
         </div>
-      </div>
-    </>
+    </AdminLayout>
   );
 }

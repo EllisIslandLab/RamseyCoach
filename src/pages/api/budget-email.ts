@@ -8,21 +8,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { email, format, fileBase64 } = req.body as {
+  const { email, fileBase64 } = req.body as {
     email: string;
-    format: 'xlsx' | 'ods';
     fileBase64: string;
   };
 
-  if (!email || !fileBase64 || !format) {
+  if (!email || !fileBase64) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
   const from = process.env.RESEND_FROM_EMAIL || 'Money-Willo <noreply@moneywillo.com>';
-  const filename = `monthly-budget.${format}`;
-  const mimeType = format === 'xlsx'
-    ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    : 'application/vnd.oasis.opendocument.spreadsheet';
+  const filename = 'monthly-budget.xlsx';
+  const mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
   try {
     await resend.emails.send({

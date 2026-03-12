@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import * as XLSX from 'xlsx';
+import XLSXStyle from 'xlsx-js-style';
 import StatementImporter, { AppliedItem } from './StatementImporter';
+import { buildBudgetWorkbook } from '@/lib/buildBudgetWorkbook';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { getUserTransactions, getGlobalCategories } from '@/lib/dataService';
@@ -938,6 +940,12 @@ export default function BudgetPlanner() {
   );
   const tog = (s: string) => setOpen(p => ({ ...p, [s]: !p[s] }));
 
+  /* Import modal */
+  const [importModalOpen, setImportModalOpen] = useState(false);
+
+  /* Chart tip modal — shown after spreadsheet download */
+  const [chartTipOpen, setChartTipOpen] = useState(false);
+
   /* Section A */
   const [assets, setAssets] = useState<NVRow[]>(() => (saved?.assets as NVRow[]) ?? dfAssets());
   const [debts,  setDebts]  = useState<NVRow[]>(() => (saved?.debts  as NVRow[]) ?? dfDebts());
@@ -1380,10 +1388,20 @@ export default function BudgetPlanner() {
     return wb;
   };
 
-  /* ── Download as Excel / ODS ──────────────────────────────────────────── */
-  const handleDownload = (format: 'xlsx' | 'ods' = 'xlsx') => {
+  /* ── Download as Spreadsheet ──────────────────────────────────────────── */
+  const handleDownload = () => {
     setSavePrintOpen(false);
-    XLSX.writeFile(buildWorkbook(), `monthly-budget.${format}`);
+    const wb = buildBudgetWorkbook({
+      assets, debts, netWorth,
+      incRows, totalIncome,
+      fixedSubs, sinks, sinksLabel, totalFixed,
+      varSubs, totalVar,
+      savings, totalSavings,
+      totalExpenses, leftover,
+      months,
+    });
+    XLSXStyle.writeFile(wb, 'monthly-budget.xlsx');
+    setChartTipOpen(true);
   };
 
 
@@ -1423,10 +1441,7 @@ export default function BudgetPlanner() {
         onSave={handleSaveToAccount}
         onImport={() => {
           setShowMonthView(false);
-          setTimeout(() => {
-            setOpen(p => ({ ...p, _import: true }));
-            document.getElementById('import-section')?.scrollIntoView({ behavior: 'smooth' });
-          }, 50);
+          setTimeout(() => setImportModalOpen(true), 50);
         }}
         onUndo={handleUndo}
         undoStack={undoStack}
@@ -1503,16 +1518,10 @@ export default function BudgetPlanner() {
                 </button>
                 <div className="border-t border-secondary-100 my-1" />
                 <button
-                  onClick={() => handleDownload('xlsx')}
+                  onClick={() => handleDownload()}
                   className="w-full text-left px-4 py-2 text-xs text-secondary-700 hover:bg-secondary-50 font-medium"
                 >
-                  Download .xlsx
-                </button>
-                <button
-                  onClick={() => handleDownload('ods')}
-                  className="w-full text-left px-4 py-2 text-xs text-secondary-700 hover:bg-secondary-50 font-medium"
-                >
-                  Download .ods
+                  Download Spreadsheet
                 </button>
               </div>
             )}
@@ -1520,10 +1529,7 @@ export default function BudgetPlanner() {
 
           {/* Import button */}
           <button
-            onClick={() => {
-              setOpen(p => ({ ...p, _import: true }));
-              document.getElementById('import-section')?.scrollIntoView({ behavior: 'smooth' });
-            }}
+            onClick={() => setImportModalOpen(true)}
             className="flex items-center gap-1.5 px-3 py-2 border border-secondary-300 rounded-lg text-secondary-600 hover:bg-secondary-100 text-xs font-semibold transition-colors"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1576,40 +1582,6 @@ export default function BudgetPlanner() {
             )}
           </div>
         </div>
-      </div>
-
-      {/* ── Import from Bank Statements ───────────────────────────────────── */}
-      <div id="import-section" data-noprint className="bg-white rounded-xl shadow-sm border border-secondary-200 overflow-hidden mb-4">
-        <button
-          onClick={() => setOpen(p => ({ ...p, _import: !p._import }))}
-          className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-secondary-50 transition-colors focus:outline-none"
-        >
-          <div className="flex items-center gap-3">
-            <span className="w-7 h-7 rounded-full bg-accent-500 text-secondary-900 text-xs font-bold flex items-center justify-center flex-shrink-0">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-              </svg>
-            </span>
-            <div>
-              <p className="font-bold text-secondary-800 text-sm md:text-base leading-tight">Import from Bank Statements</p>
-              <p className="text-secondary-400 text-xs mt-0.5 leading-tight">
-                Drop CSV exports from your bank — auto-categorizes and populates the budget below
-              </p>
-            </div>
-          </div>
-          <svg
-            className={`w-5 h-5 text-secondary-400 transform transition-transform duration-200 flex-shrink-0 ml-4 ${open._import ? 'rotate-180' : ''}`}
-            fill="none" stroke="currentColor" viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </button>
-        {open._import && (
-          <div className="px-5 pb-6 border-t border-secondary-100 pt-4">
-            <StatementImporter onApply={handleApplyTransactions} />
-          </div>
-        )}
       </div>
 
       {/* ── A: Net Worth ─────────────────────────────────────────────────── */}
@@ -1944,6 +1916,96 @@ export default function BudgetPlanner() {
           >
             Cancel
           </button>
+        </div>
+      )}
+
+      {/* ── Import Modal ────────────────────────────────────────────────────── */}
+      {importModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+          onClick={e => { if (e.target === e.currentTarget) setImportModalOpen(false); }}
+        >
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-secondary-200">
+              <div className="flex items-center gap-3">
+                <span className="w-7 h-7 rounded-full bg-accent-500 text-secondary-900 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                </span>
+                <div>
+                  <p className="font-bold text-secondary-800 text-sm md:text-base leading-tight">Import from Bank Statements</p>
+                  <p className="text-secondary-400 text-xs mt-0.5 leading-tight">
+                    Drop CSV exports from your bank — auto-categorizes and populates the budget below
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setImportModalOpen(false)}
+                className="text-secondary-400 hover:text-secondary-600 transition-colors ml-4"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="px-6 py-5 overflow-y-auto">
+              <StatementImporter onApply={items => { handleApplyTransactions(items); setImportModalOpen(false); }} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Net Worth Chart Tip Modal ──────────────────────────────────────── */}
+      {chartTipOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+          onClick={e => { if (e.target === e.currentTarget) setChartTipOpen(false); }}
+        >
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
+            <div className="flex items-start justify-between px-6 pt-5 pb-4 border-b border-secondary-200">
+              <div>
+                <p className="font-bold text-secondary-800 text-base">Add the Net Worth Chart</p>
+                <p className="text-secondary-400 text-xs mt-0.5">
+                  Your file downloaded. Follow these steps to insert the line chart.
+                </p>
+              </div>
+              <button
+                onClick={() => setChartTipOpen(false)}
+                className="text-secondary-400 hover:text-secondary-600 transition-colors ml-4 flex-shrink-0 mt-0.5"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="px-6 py-5 space-y-5 text-sm text-secondary-700">
+
+              <div>
+                <ol className="space-y-1 pl-4 list-decimal text-secondary-600 text-xs leading-relaxed">
+                  <li>Open your downloaded spreadsheet</li>
+                  <li>Click cell <span className="font-mono bg-secondary-100 px-1 rounded">D2</span>, then Shift-click <span className="font-mono bg-secondary-100 px-1 rounded">O2</span> to select the Net Worth row</li>
+                  <li>Go to <strong>Insert</strong> → <strong>Charts</strong> → <strong>Line</strong> → choose <em>Line with Markers</em></li>
+                  <li>Right-click the chart → <strong>Move Chart</strong> to place it where you like</li>
+                </ol>
+              </div>
+
+<p className="text-secondary-400 text-xs border-t border-secondary-100 pt-4">
+                The Net Worth row is always in row 2 of your downloaded file — the chart will update automatically each time you re-download with new data.
+              </p>
+            </div>
+
+            <div className="px-6 pb-5">
+              <button
+                onClick={() => setChartTipOpen(false)}
+                className="w-full py-2 rounded-lg bg-primary-600 text-white text-sm font-semibold hover:bg-primary-700 transition-colors"
+              >
+                Got it
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
