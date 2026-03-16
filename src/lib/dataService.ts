@@ -404,6 +404,19 @@ export async function updateAccountabilitySettings(
   }
 }
 
+/** Clears the user's saved budget data (used by "Reset to Defaults" in Account Settings). */
+export async function resetBudgetData(userId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('user_tool_data')
+      .upsert({ user_id: userId, budget_data: {}, updated_at: new Date().toISOString() });
+    if (error) throw error;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Returns the user's budget subsection labels (fixedSubs + varSubs) plus
  * "Income" and "Savings" — used to populate the accountability category picker

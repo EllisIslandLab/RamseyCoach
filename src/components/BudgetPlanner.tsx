@@ -604,28 +604,18 @@ interface MCVActionButtonsProps {
 
 function MCVActionButtons({ onSave, onImport, onUndo, undoStack }: MCVActionButtonsProps) {
   const [savePrintOpen, setSavePrintOpen] = useState(false);
-  const [undoMenuOpen, setUndoMenuOpen] = useState(false);
   const savePrintRef = useRef<HTMLDivElement>(null);
-  const undoMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handle(e: MouseEvent) {
       if (savePrintRef.current && !savePrintRef.current.contains(e.target as Node)) setSavePrintOpen(false);
-      if (undoMenuRef.current && !undoMenuRef.current.contains(e.target as Node)) setUndoMenuOpen(false);
     }
     document.addEventListener('mousedown', handle);
     return () => document.removeEventListener('mousedown', handle);
   }, []);
 
-  const relTime = (ts: number) => {
-    const diff = Math.floor((Date.now() - ts) / 1000);
-    if (diff < 60) return 'just now';
-    if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
-    return `${Math.floor(diff / 3600)} hr ago`;
-  };
-
   return (
-    <div className="flex gap-2 flex-wrap">
+    <div className="flex gap-2">
       {/* Save / Print dropdown */}
       <div className="relative" ref={savePrintRef}>
         <button
@@ -636,8 +626,9 @@ function MCVActionButtons({ onSave, onImport, onUndo, undoStack }: MCVActionButt
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
               d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
           </svg>
-          Save / Print
-          <svg className="w-3 h-3 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <span className="sm:hidden">Save</span>
+          <span className="hidden sm:inline">Save / Print</span>
+          <svg className="w-3 h-3 ml-0.5 hidden sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
         </button>
@@ -672,48 +663,18 @@ function MCVActionButtons({ onSave, onImport, onUndo, undoStack }: MCVActionButt
         Import
       </button>
 
-      {/* Undo dropdown */}
-      <div className="relative" ref={undoMenuRef}>
-        <button
-          onClick={() => setUndoMenuOpen(p => !p)}
-          className={`flex items-center gap-1.5 px-3 py-2 border border-secondary-300 rounded-lg text-secondary-600 hover:bg-secondary-100 text-xs font-semibold transition-colors ${undoStack.length === 0 ? 'opacity-40' : ''}`}
-        >
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6M3 10l6-6" />
-          </svg>
-          Undo
-          <svg className="w-3 h-3 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </button>
-        {undoMenuOpen && (
-          <div className="absolute right-0 top-full mt-1 bg-white border border-secondary-200 rounded-lg shadow-lg py-1 z-30 min-w-[220px]">
-            {undoStack.length === 0 ? (
-              <span className="block px-4 py-2 text-xs text-secondary-400">Nothing to undo</span>
-            ) : (
-              [...undoStack].reverse().slice(0, 5).map((snap, i) => {
-                const realIdx = undoStack.length - 1 - i;
-                return (
-                  <button
-                    key={realIdx}
-                    onClick={() => { onUndo(realIdx); setUndoMenuOpen(false); }}
-                    className="w-full text-left px-4 py-2 text-xs text-secondary-700 hover:bg-secondary-50 font-medium"
-                  >
-                    Step {realIdx + 1} — {relTime(snap.timestamp)}
-                  </button>
-                );
-              })
-            )}
-            <div className="border-t border-secondary-100 my-1" />
-            <button
-              onClick={() => { setUndoMenuOpen(false); }}
-              className="w-full text-left px-4 py-2 text-xs text-red-500 hover:bg-red-50 font-medium"
-            >
-              Total Reset
-            </button>
-          </div>
-        )}
-      </div>
+      {/* Undo — single step, icon-only on mobile */}
+      <button
+        onClick={() => onUndo()}
+        disabled={undoStack.length === 0}
+        title="Undo last change"
+        className={`flex items-center gap-1.5 px-2 sm:px-3 py-2 border border-secondary-300 rounded-lg text-secondary-600 hover:bg-secondary-100 text-xs font-semibold transition-colors ${undoStack.length === 0 ? 'opacity-40 cursor-not-allowed' : ''}`}
+      >
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6M3 10l6-6" />
+        </svg>
+        <span className="hidden sm:inline">Undo</span>
+      </button>
     </div>
   );
 }
@@ -1098,16 +1059,13 @@ export default function BudgetPlanner() {
     }
   }, [fixedSubs, varSubs]);
 
-  /* ── Save/Print and Undo dropdowns ───────────────────────────────────── */
+  /* ── Save/Print dropdown ─────────────────────────────────────────────── */
   const [savePrintOpen, setSavePrintOpen] = useState(false);
-  const [undoMenuOpen, setUndoMenuOpen] = useState(false);
   const savePrintRef = useRef<HTMLDivElement>(null);
-  const undoMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handle(e: MouseEvent) {
       if (savePrintRef.current && !savePrintRef.current.contains(e.target as Node)) setSavePrintOpen(false);
-      if (undoMenuRef.current && !undoMenuRef.current.contains(e.target as Node)) setUndoMenuOpen(false);
     }
     document.addEventListener('mousedown', handle);
     return () => document.removeEventListener('mousedown', handle);
@@ -1419,14 +1377,6 @@ export default function BudgetPlanner() {
   };
 
 
-  /* ── Relative time helper for undo dropdown ───────────────────────────── */
-  const relTime = (ts: number) => {
-    const diff = Math.floor((Date.now() - ts) / 1000);
-    if (diff < 60) return 'just now';
-    if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
-    return `${Math.floor(diff / 3600)} hr ago`;
-  };
-
   /* ── Comparison view — full-page replacement ─────────────────────────── */
   if (showMonthView) {
     return (
@@ -1478,25 +1428,26 @@ export default function BudgetPlanner() {
       </div>
 
       {/* Action Bar — sticky below site header + tab nav */}
-      <div data-noprint className="sticky top-[116px] md:top-[132px] z-10 bg-secondary-50 border-b border-secondary-200 py-2 mb-6 flex justify-end gap-2 flex-wrap">
+      <div data-noprint className="sticky top-[116px] md:top-[132px] z-10 bg-secondary-50 border-b border-secondary-200 py-2 mb-6 flex justify-end items-center gap-2 flex-wrap">
 
-          {/* Compare Months shortcut */}
+          {/* Compare Monthly */}
           <button
             onClick={() => setShowMonthView(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-secondary-100 hover:bg-secondary-200 text-secondary-700 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-secondary-100 hover:bg-secondary-200 text-secondary-700 transition-colors whitespace-nowrap"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
-            Compare Months
+            <span className="sm:hidden">Monthly</span>
+            <span className="hidden sm:inline">Compare Monthly</span>
           </button>
 
           {/* Save / Print dropdown */}
-          <div className="relative" ref={savePrintRef}>
+          <div className="relative shrink-0" ref={savePrintRef}>
             <button
               onClick={() => setSavePrintOpen(p => !p)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
                 saveStatus === 'saved'
                   ? 'bg-green-100 border border-green-300 text-green-700'
                   : saveStatus === 'error'
@@ -1506,23 +1457,24 @@ export default function BudgetPlanner() {
             >
               {saveStatus === 'saved' ? (
                 <>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                   Saved!
                 </>
               ) : saveStatus === 'error' ? (
-                'Error — try again'
+                'Error'
               ) : saveStatus === 'saving' ? (
                 'Saving…'
               ) : (
                 <>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                       d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
                   </svg>
-                  Save / Print
-                  <svg className="w-3 h-3 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <span className="sm:hidden">Save</span>
+                  <span className="hidden sm:inline">Save / Print</span>
+                  <svg className="w-3 h-3 ml-0.5 hidden sm:block shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </>
@@ -1545,7 +1497,7 @@ export default function BudgetPlanner() {
                 </button>
                 <div className="border-t border-secondary-100 my-1" />
                 <button
-                  onClick={() => handleDownload()}
+                  onClick={() => { handleDownload(); setSavePrintOpen(false); }}
                   className="w-full text-left px-4 py-2 text-xs text-secondary-700 hover:bg-secondary-50 font-medium"
                 >
                   Download Spreadsheet
@@ -1554,60 +1506,30 @@ export default function BudgetPlanner() {
             )}
           </div>
 
-          {/* Import button */}
+          {/* Import */}
           <button
             onClick={() => setImportModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 border border-secondary-300 rounded-lg text-secondary-600 hover:bg-secondary-100 text-xs font-semibold transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 border border-secondary-300 rounded-lg text-secondary-600 hover:bg-secondary-100 text-xs font-semibold transition-colors whitespace-nowrap shrink-0"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
             </svg>
             Import
           </button>
 
-          {/* Undo dropdown */}
-          <div className="relative" ref={undoMenuRef}>
-            <button
-              onClick={() => setUndoMenuOpen(p => !p)}
-              className={`flex items-center gap-1.5 px-3 py-2 border border-secondary-300 rounded-lg text-secondary-600 hover:bg-secondary-100 text-xs font-semibold transition-colors ${undoStack.length === 0 ? 'opacity-40' : ''}`}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6M3 10l6-6" />
-              </svg>
-              Undo
-              <svg className="w-3 h-3 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-            {undoMenuOpen && (
-              <div className="absolute right-0 top-full mt-1 bg-white border border-secondary-200 rounded-lg shadow-lg py-1 z-30 min-w-[220px]">
-                {undoStack.length === 0 ? (
-                  <span className="block px-4 py-2 text-xs text-secondary-400">Nothing to undo</span>
-                ) : (
-                  [...undoStack].reverse().slice(0, 5).map((snap, i) => {
-                    const realIdx = undoStack.length - 1 - i;
-                    return (
-                      <button
-                        key={realIdx}
-                        onClick={() => { handleUndo(realIdx); setUndoMenuOpen(false); }}
-                        className="w-full text-left px-4 py-2 text-xs text-secondary-700 hover:bg-secondary-50 font-medium"
-                      >
-                        Step {realIdx + 1} — {relTime(snap.timestamp)}
-                      </button>
-                    );
-                  })
-                )}
-                <div className="border-t border-secondary-100 my-1" />
-                <button
-                  onClick={() => { handleReset(); setUndoMenuOpen(false); }}
-                  className="w-full text-left px-4 py-2 text-xs text-red-500 hover:bg-red-50 font-medium"
-                >
-                  Total Reset
-                </button>
-              </div>
-            )}
-          </div>
+          {/* Undo — single step, icon-only on mobile */}
+          <button
+            onClick={() => handleUndo()}
+            disabled={undoStack.length === 0}
+            title="Undo last change"
+            className={`flex items-center gap-1.5 px-2 sm:px-3 py-2 border border-secondary-300 rounded-lg text-secondary-600 hover:bg-secondary-100 text-xs font-semibold transition-colors shrink-0 ${undoStack.length === 0 ? 'opacity-40 cursor-not-allowed' : ''}`}
+          >
+            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6M3 10l6-6" />
+            </svg>
+            <span className="hidden sm:inline">Undo</span>
+          </button>
         </div>
 
       {/* ── A: Net Worth ─────────────────────────────────────────────────── */}

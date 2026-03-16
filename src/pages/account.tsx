@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 import {
   getSharedAccess,
   removeSharedAccess,
+  resetBudgetData,
   type SharedAccess,
 } from '@/lib/dataService';
 import AccountabilitySettingsPanel from '@/components/AccountabilitySettingsPanel';
@@ -77,6 +78,9 @@ export default function AccountPage() {
   const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteFeedback, setDeleteFeedback] = useState<FeedbackState>(null);
+
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetFeedback, setResetFeedback] = useState<FeedbackState>(null);
 
   // Populate display name from user metadata
   useEffect(() => {
@@ -245,6 +249,23 @@ export default function AccountPage() {
     router.replace('/');
   }
 
+  async function handleResetBudget() {
+    if (!window.confirm('Reset your budget to defaults? This will clear all saved budget data and cannot be undone.')) return;
+    setResetLoading(true);
+    setResetFeedback(null);
+    const ok = await resetBudgetData(user!.id);
+    // Also clear localStorage so the budget tool picks up the fresh state immediately
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('ramseycoach_budget');
+      localStorage.removeItem('ramseycoach_budget_months');
+    }
+    setResetLoading(false);
+    setResetFeedback(ok
+      ? { type: 'success', message: 'Budget reset. Your budget planner will start fresh next time you open it.' }
+      : { type: 'error', message: 'Failed to reset. Please try again.' }
+    );
+  }
+
   // ─── Render ─────────────────────────────────────────────────────────────────
 
   return (
@@ -258,7 +279,7 @@ export default function AccountPage() {
         <div className="max-w-2xl mx-auto space-y-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Account Settings</h1>
-            <p className="text-sm text-gray-500 mt-1">{user.email}</p>
+            <p className="text-sm text-gray-500 mt-1">{user!.email}</p>
           </div>
 
           {/* ── Profile ──────────────────────────────────────────────────── */}
@@ -288,7 +309,7 @@ export default function AccountPage() {
           {/* ── Email ────────────────────────────────────────────────────── */}
           <section className={card}>
             <h2 className="text-base font-semibold text-gray-900 mb-1">Email address</h2>
-            <p className="text-sm text-gray-500 mb-4">Current: <span className="font-medium text-gray-700">{user.email}</span></p>
+            <p className="text-sm text-gray-500 mb-4">Current: <span className="font-medium text-gray-700">{user!.email}</span></p>
             <div>
               <label htmlFor="new-email" className={label}>New email address</label>
               <input
@@ -312,7 +333,7 @@ export default function AccountPage() {
           <section className={card}>
             <h2 className="text-base font-semibold text-gray-900 mb-1">Password</h2>
             <p className="text-sm text-gray-500 mb-4">
-              We'll send a reset link to <span className="font-medium text-gray-700">{user.email}</span>.
+              We'll send a reset link to <span className="font-medium text-gray-700">{user!.email}</span>.
             </p>
             <button className={btnOutline} onClick={handleSendPasswordReset} disabled={passwordSending}>
               {passwordSending ? 'Sending…' : 'Send password reset email'}
@@ -512,7 +533,26 @@ export default function AccountPage() {
 
           {/* ── Danger zone ──────────────────────────────────────────────── */}
           <section className={`${card} border-red-100`}>
-            <h2 className="text-base font-semibold text-red-700 mb-1">Danger zone</h2>
+            <h2 className="text-base font-semibold text-red-700 mb-4">Danger zone</h2>
+
+            {/* Reset budget */}
+            <div className="mb-6 pb-6 border-b border-red-50">
+              <p className="text-sm font-medium text-gray-800 mb-1">Reset budget to defaults</p>
+              <p className="text-sm text-gray-500 mb-3">
+                Clears all budget data and returns the Budget Planner to its default state. Your account stays active.
+              </p>
+              <button
+                onClick={handleResetBudget}
+                disabled={resetLoading}
+                className="px-4 py-2 border border-red-300 text-red-600 hover:bg-red-50 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+              >
+                {resetLoading ? 'Resetting…' : 'Reset to Defaults'}
+              </button>
+              <Feedback state={resetFeedback} />
+            </div>
+
+            {/* Delete account */}
+            <p className="text-sm font-medium text-gray-800 mb-1">Delete account</p>
             <p className="text-sm text-gray-500 mb-4">
               Permanently deletes your account and all saved data. This cannot be undone.
             </p>
@@ -527,12 +567,12 @@ export default function AccountPage() {
             ) : (
               <div className="space-y-3">
                 <p className="text-sm text-gray-700">
-                  Type your email address to confirm: <span className="font-medium">{user.email}</span>
+                  Type your email address to confirm: <span className="font-medium">{user!.email}</span>
                 </p>
                 <input
                   type="email"
                   className={`${input} border-red-200 focus:ring-red-400`}
-                  placeholder={user.email}
+                  placeholder={user!.email}
                   value={deleteConfirmInput}
                   onChange={(e) => setDeleteConfirmInput(e.target.value)}
                 />
