@@ -297,6 +297,180 @@ export async function deleteCustomCategory(id: string): Promise<boolean> {
   }
 }
 
+// ─── Shared Access ────────────────────────────────────────────────────────────
+
+export interface TrackedCategory {
+  category: string;
+  threshold: number;         // dollar amount over budget to trigger alert
+  notify_owner: boolean;
+  notify_partner: boolean;
+}
+
+export interface AccountabilitySettings {
+  can_view_full_budget: boolean;
+  show_merchants: boolean;
+  tracked_categories: TrackedCategory[];
+  check_in_schedule?: 'weekly' | 'biweekly' | 'monthly' | null;
+  check_in_day?: number | null; // 0–6 (Sun–Sat) for weekly/biweekly; 1–28 for monthly
+}
+
+export interface SharedAccess {
+  id: string;
+  owner_id: string;
+  partner_id: string | null;
+  partner_email: string;
+  access_type: 'spouse' | 'accountability';
+  status: 'pending' | 'active' | 'declined';
+  invite_token: string;
+  accountability_settings: AccountabilitySettings | null;
+  created_at: string;
+}
+
+export interface BudgetNotification {
+  id: string;
+  shared_access_id: string;
+  type: 'budget_change' | 'over_budget' | 'under_budget' | 'nudge';
+  category: string | null;
+  payload: Record<string, unknown> | null;
+  response_token: string;
+  response: 'approved' | 'discuss' | 'meeting' | 'acknowledged' | null;
+  created_at: string;
+  responded_at: string | null;
+}
+
+/** Returns all active/pending sharing relationships for this user (as owner or partner). */
+export async function getSharedAccess(userId: string): Promise<SharedAccess[]> {
+  try {
+    const { data, error } = await supabase
+      .from('shared_access')
+      .select('*')
+      .or(`owner_id.eq.${userId},partner_id.eq.${userId}`)
+      .neq('status', 'declined');
+    if (error) throw error;
+    return (data ?? []) as SharedAccess[];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * For spouse sharing: if this user is an active partner, returns the owner's user_id
+ * so BudgetPlanner loads the shared budget. Otherwise returns the user's own id.
+ */
+export async function getEffectiveBudgetOwnerId(userId: string): Promise<string> {
+  try {
+    const { data, error } = await supabase
+      .from('shared_access')
+      .select('owner_id')
+      .eq('partner_id', userId)
+      .eq('access_type', 'spouse')
+      .eq('status', 'active')
+      .maybeSingle();
+    if (error) throw error;
+    return data?.owner_id ?? userId;
+  } catch {
+    return userId;
+  }
+}
+
+/** Owner removes a sharing relationship. */
+export async function removeSharedAccess(id: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('shared_access')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Owner updates accountability settings (tracked categories, permissions). */
+export async function updateAccountabilitySettings(
+  id: string,
+  settings: AccountabilitySettings
+): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('shared_access')
+      .update({ accountability_settings: settings })
+      .eq('id', id);
+    if (error) throw error;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Returns the user's budget subsection labels (fixedSubs + varSubs) plus
+ * "Income" and "Savings" — used to populate the accountability category picker
+ * with real budget lines instead of generic global categories.
+ */
+export async function getBudgetSubsectionNames(userId: string): Promise<string[]> {
+  try {
+    const { data, error } = await supabase
+      .from('user_tool_data')
+      .select('budget_data')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (error) throw error;
+    const bd = (data?.budget_data ?? {}) as Record<string, unknown>;
+    const names: string[] = ['Income', 'Savings'];
+    for (const sub of [
+      ...((bd.fixedSubs ?? []) as Array<{ label: string }>),
+      ...((bd.varSubs ?? []) as Array<{ label: string }>),
+    ]) {
+      if (sub.label && !names.includes(sub.label)) names.push(sub.label);
+    }
+    return names;
+  } catch {
+    return ['Income', 'Savings'];
+  }
+}
+
+/**
+ * Returns owners whose full budget this user (as accountability partner) is
+ * allowed to view — i.e. active accountability shares with can_view_full_budget.
+ */
+export async function getViewableBudgetOwners(
+  userId: string
+): Promise<Array<{ shareId: string; ownerId: string }>> {
+  try {
+    const { data, error } = await supabase
+      .from('shared_access')
+      .select('id, owner_id, accountability_settings')
+      .eq('partner_id', userId)
+      .eq('access_type', 'accountability')
+      .eq('status', 'active');
+    if (error) throw error;
+    return (data ?? [])
+      .filter((r) => (r.accountability_settings as AccountabilitySettings | null)?.can_view_full_budget)
+      .map((r) => ({ shareId: r.id, ownerId: r.owner_id }));
+  } catch {
+    return [];
+  }
+}
+
+/** Loads the raw budget_data for a partner-accessible owner (RLS enforces access). */
+export async function getPartnerBudgetData(
+  ownerId: string
+): Promise<Record<string, unknown> | null> {
+  try {
+    const { data, error } = await supabase
+      .from('user_tool_data')
+      .select('budget_data')
+      .eq('user_id', ownerId)
+      .maybeSingle();
+    if (error) throw error;
+    return (data?.budget_data ?? null) as Record<string, unknown> | null;
+  } catch {
+    return null;
+  }
+}
+
 // ─── Admin: Flags (read via API route — not directly from client) ─────────────
 
 export async function updateFlagStatus(

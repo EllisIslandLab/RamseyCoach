@@ -306,10 +306,6 @@ function AmtRowList({
           <div
             key={row.id}
             className={`flex gap-2 items-center rounded transition-colors ${isSelected ? 'bg-primary-50' : ''} ${dragOverIdx === i ? 'border-t-2 border-primary-400' : ''}`}
-            draggable={!!dragItem}
-            onDragStart={() => {
-              if (dragItem) dragItem.current = { sectionType, subId, rowId: row.id };
-            }}
             onDragOver={e => {
               e.preventDefault();
               if (dragItem?.current && dragItem.current.rowId !== row.id) {
@@ -349,7 +345,12 @@ function AmtRowList({
           >
             {/* Drag handle */}
             {dragItem && (
-              <span className="text-secondary-300 cursor-grab active:cursor-grabbing text-base select-none flex-shrink-0 px-0.5" title="Drag to reorder">
+              <span
+                draggable
+                onDragStart={() => { dragItem.current = { sectionType, subId, rowId: row.id }; }}
+                className="text-secondary-300 cursor-grab active:cursor-grabbing text-base select-none flex-shrink-0 px-0.5"
+                title="Drag to reorder"
+              >
                 ⠿
               </span>
             )}
@@ -784,18 +785,18 @@ function MonthComparisonView({
 
   return (
     <div className="container-custom py-8 max-w-3xl mx-auto">
-      {/* Header bar */}
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+      {/* Header bar — sticky below site header + tab nav */}
+      <div data-noprint className="sticky top-[116px] md:top-[132px] z-10 bg-secondary-50 border-b border-secondary-200 py-2 mb-6 flex items-center justify-between gap-2 flex-wrap">
         <button
           onClick={onBack}
-          className="flex items-center gap-1.5 text-sm text-secondary-600 hover:text-secondary-800 font-semibold transition-colors"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-secondary-100 hover:bg-secondary-200 text-secondary-700 transition-colors"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
           Back to Budget
         </button>
-        <h2 className="text-xl font-bold text-secondary-800">Monthly Comparison</h2>
+        <span className="text-sm font-bold text-secondary-700 hidden sm:block">Monthly Comparison</span>
         {/* Quick action buttons */}
         <MCVActionButtons onSave={onSave} onImport={onImport} onUndo={onUndo} undoStack={undoStack} />
       </div>
@@ -1208,6 +1209,19 @@ export default function BudgetPlanner() {
                { onConflict: 'user_id' });
     setSaveStatus(error ? 'error' : 'saved');
     setTimeout(() => setSaveStatus('idle'), 3000);
+
+    // Fire-and-forget: trigger accountability alerts and spouse change notifications
+    if (!error) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (!session) return;
+        const headers = {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        };
+        // Accountability threshold alerts
+        fetch('/api/shared-access/alert', { method: 'POST', headers }).catch(() => {});
+      });
+    }
   };
 
   /* ── Derived calculations ─────────────────────────────────────────────── */
@@ -1453,17 +1467,30 @@ export default function BudgetPlanner() {
   return (
     <div className="container-custom py-8 max-w-3xl mx-auto">
 
-      {/* Action Bar */}
-      <div data-noprint className="flex items-center justify-between mb-4 flex-wrap gap-3">
-        <div>
-          <h2 className="text-xl font-bold text-secondary-800">Interactive Budget Planner</h2>
-          <p className="text-secondary-400 text-xs mt-0.5">
-            {user
-              ? 'Signed in — click Save to sync your data to your account.'
-              : 'Data saves locally. Sign in to keep it permanently.'}
-          </p>
-        </div>
-        <div className="flex gap-2 flex-shrink-0 flex-wrap">
+      {/* Title — static */}
+      <div data-noprint className="mb-3">
+        <h2 className="text-xl font-bold text-secondary-800">Interactive Budget Planner</h2>
+        <p className="text-secondary-400 text-xs mt-0.5">
+          {user
+            ? 'Signed in — click Save to sync your data to your account.'
+            : 'Data saves locally. Sign in to keep it permanently.'}
+        </p>
+      </div>
+
+      {/* Action Bar — sticky below site header + tab nav */}
+      <div data-noprint className="sticky top-[116px] md:top-[132px] z-10 bg-secondary-50 border-b border-secondary-200 py-2 mb-6 flex justify-end gap-2 flex-wrap">
+
+          {/* Compare Months shortcut */}
+          <button
+            onClick={() => setShowMonthView(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-secondary-100 hover:bg-secondary-200 text-secondary-700 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            Compare Months
+          </button>
 
           {/* Save / Print dropdown */}
           <div className="relative" ref={savePrintRef}>
@@ -1582,7 +1609,6 @@ export default function BudgetPlanner() {
             )}
           </div>
         </div>
-      </div>
 
       {/* ── A: Net Worth ─────────────────────────────────────────────────── */}
       <SectionCard

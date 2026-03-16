@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
+import UserMenu from '@/components/UserMenu';
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -108,15 +109,7 @@ export default function Header() {
             {/* Auth button — desktop */}
             <div className="hidden md:flex items-center ml-2">
               {user ? (
-                <div className="flex items-center gap-3">
-                  <span className="text-primary-200 text-sm truncate max-w-[160px]">{user.email}</span>
-                  <button
-                    onClick={signOut}
-                    className="text-white border border-primary-400 hover:border-accent-400 hover:text-accent-400 text-sm font-medium px-3 py-1.5 rounded-lg transition-colors duration-300"
-                  >
-                    Sign Out
-                  </button>
-                </div>
+                <UserMenu />
               ) : (
                 <button
                   onClick={openAuthModal}
@@ -196,9 +189,22 @@ export default function Header() {
             {user ? (
               <>
                 <p className="text-primary-200 text-xs mb-3 truncate">{user.email}</p>
+                <Link
+                  href="/account"
+                  onClick={closeMenu}
+                  className="flex items-center text-white hover:text-accent-400 text-sm font-medium py-2 transition-colors duration-300 touch-target"
+                >
+                  Account Settings
+                </Link>
+                <button
+                  disabled
+                  className="flex items-center text-primary-400 text-sm font-medium py-2 cursor-not-allowed w-full text-left"
+                >
+                  Preferences <span className="ml-2 text-xs bg-primary-600 px-1.5 py-0.5 rounded">soon</span>
+                </button>
                 <button
                   onClick={() => { signOut(); closeMenu(); }}
-                  className="text-white border border-primary-400 hover:border-accent-400 hover:text-accent-400 text-sm font-medium px-4 py-2 rounded-lg transition-colors duration-300 w-full text-left"
+                  className="mt-2 text-white border border-primary-400 hover:border-accent-400 hover:text-accent-400 text-sm font-medium px-4 py-2 rounded-lg transition-colors duration-300 w-full text-left"
                 >
                   Sign Out
                 </button>
