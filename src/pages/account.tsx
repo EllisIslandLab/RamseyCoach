@@ -4,6 +4,7 @@ import { useRouter } from 'next/router';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { useAuth } from '@/context/AuthContext';
+import { usePreferences } from '@/context/PreferencesContext';
 import { supabase } from '@/lib/supabase';
 import {
   getSharedAccess,
@@ -43,6 +44,7 @@ function Feedback({ state }: { state: FeedbackState }) {
 export default function AccountPage() {
   const router = useRouter();
   const { user, signOut, loading } = useAuth();
+  const { wholeDollars, setWholeDollars } = usePreferences();
 
   // Display name
   const [displayName, setDisplayName] = useState('');
@@ -529,6 +531,42 @@ export default function AccountPage() {
               </div>
               <Feedback state={inviteFeedback} />
             </div>
+          </section>
+
+          {/* ── Preferences ──────────────────────────────────────────────── */}
+          <section id="preferences" className={card}>
+            <h2 className="text-base font-semibold text-gray-900 mb-4">Preferences</h2>
+
+            <div className="space-y-5">
+              {/* Currency display */}
+              <div>
+                <label className={label}>Budget number format</label>
+                <div className="flex gap-3 flex-wrap mt-1">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="whole-dollars"
+                      checked={wholeDollars}
+                      onChange={() => setWholeDollars(true)}
+                      className="accent-primary-600"
+                    />
+                    <span className="text-sm text-gray-700">Whole dollars <span className="text-gray-400">($1,234)</span></span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="whole-dollars"
+                      checked={!wholeDollars}
+                      onChange={() => setWholeDollars(false)}
+                      className="accent-primary-600"
+                    />
+                    <span className="text-sm text-gray-700">With cents <span className="text-gray-400">($1,234.56)</span></span>
+                  </label>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">Applies to the Budget Planner display.</p>
+              </div>
+            </div>
+            <p className="text-xs text-gray-400 mt-5">Preferences are saved locally on this device.</p>
           </section>
 
           {/* ── Danger zone ──────────────────────────────────────────────── */}

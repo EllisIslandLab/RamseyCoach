@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { usePreferences } from '@/context/PreferencesContext';
 import * as XLSX from 'xlsx';
 import XLSXStyle from 'xlsx-js-style';
 import StatementImporter, { AppliedItem } from './StatementImporter';
@@ -27,8 +28,16 @@ interface MonthData {
 /* ─── Module-level helpers ─────────────────────────────────────────────────── */
 const uid = () => Math.random().toString(36).slice(2, 9);
 const nv  = (s: string) => parseFloat(s) || 0;
+
+// Mutable flag synced from BudgetPlanner on each render — safe for a singleton component.
+let _wholeDollars = true;
 const fmt = (v: number) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v);
+  new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: _wholeDollars ? 0 : 2,
+    minimumFractionDigits: _wholeDollars ? 0 : 2,
+  }).format(v);
 
 const FREQS: { val: FreqVal; label: string; div: number }[] = [
   { val: 'weekly',    label: 'Weekly',          div: 12 / 52 }, // × 52/12 → monthly
@@ -747,7 +756,7 @@ function MonthComparisonView({
   return (
     <div className="container-custom py-8 max-w-3xl mx-auto">
       {/* Header bar — sticky below site header + tab nav */}
-      <div data-noprint className="sticky top-[116px] md:top-[132px] z-10 bg-secondary-50 border-b border-secondary-200 py-2 mb-6 flex items-center justify-between gap-2 flex-wrap">
+      <div data-noprint className="sticky top-[64px] md:top-[80px] z-10 bg-secondary-50 border-b border-secondary-200 py-2 mb-6 flex items-center justify-between gap-2 flex-wrap">
         <button
           onClick={onBack}
           className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-secondary-100 hover:bg-secondary-200 text-secondary-700 transition-colors"
@@ -891,6 +900,8 @@ type BudgetUndoSnapshot = {
 
 export default function BudgetPlanner() {
   const { user, openAuthModal } = useAuth();
+  const { wholeDollars } = usePreferences();
+  _wholeDollars = wholeDollars; // sync formatter before any child renders
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
   /* Load once from localStorage (lazy — runs only on mount) */
@@ -1428,7 +1439,7 @@ export default function BudgetPlanner() {
       </div>
 
       {/* Action Bar — sticky below site header + tab nav */}
-      <div data-noprint className="sticky top-[116px] md:top-[132px] z-10 bg-secondary-50 border-b border-secondary-200 py-2 mb-6 flex justify-end items-center gap-2 flex-wrap">
+      <div data-noprint className="sticky top-[64px] md:top-[80px] z-10 bg-secondary-50 border-b border-secondary-200 py-2 mb-6 flex justify-end items-center gap-2 flex-wrap">
 
           {/* Compare Monthly */}
           <button

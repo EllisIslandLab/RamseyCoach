@@ -1,15 +1,24 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import UserMenu from '@/components/UserMenu';
 
+const toolsItems = [
+  { href: '/tools?tab=calculators', label: 'Financial Calculators' },
+  { href: '/tools?tab=budget', label: 'Budget Planner' },
+  { href: '/tools?tab=transactions', label: 'Transactions' },
+];
+
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [isToolsOpen, setIsToolsOpen] = useState(false);
+  const [isMobileToolsOpen, setIsMobileToolsOpen] = useState(false);
+  const toolsRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const { user, openAuthModal, signOut } = useAuth();
 
@@ -23,12 +32,15 @@ export default function Header() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Close menu when clicking outside (mobile)
+  // Close menus when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
       if (isMenuOpen && !target.closest('.mobile-menu') && !target.closest('.hamburger-btn')) {
         setIsMenuOpen(false);
+      }
+      if (toolsRef.current && !toolsRef.current.contains(target as Node)) {
+        setIsToolsOpen(false);
       }
     };
 
@@ -59,14 +71,6 @@ export default function Header() {
     return pathname === '/' ? anchor : `/${anchor}`;
   };
 
-  const navLinks = [
-    { href: '/', label: 'Home' },
-    { href: getAnchorHref('#testimonials'), label: 'Testimonials' },
-    { href: '/tools', label: 'Tools' },
-    { href: getAnchorHref('#booking'), label: 'Consultation' },
-    { href: '/contact', label: 'Contact' },
-  ];
-
   return (
     <>
       {/* Sticky Header */}
@@ -95,15 +99,51 @@ export default function Header() {
 
             {/* Desktop Navigation */}
             <nav className="hidden md:flex items-center space-x-8">
-              {navLinks.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className="text-white hover:text-accent-400 font-medium transition-colors duration-300"
+              <Link href="/" className="text-white hover:text-accent-400 font-medium transition-colors duration-300">
+                Home
+              </Link>
+              <Link href={getAnchorHref('#testimonials')} className="text-white hover:text-accent-400 font-medium transition-colors duration-300">
+                Testimonials
+              </Link>
+              <Link href={getAnchorHref('#booking')} className="text-white hover:text-accent-400 font-medium transition-colors duration-300">
+                Consultation
+              </Link>
+              <Link href="/contact" className="text-white hover:text-accent-400 font-medium transition-colors duration-300">
+                Contact
+              </Link>
+
+              {/* Tools dropdown — visually distinct, pushed right */}
+              <div ref={toolsRef} className="relative ml-4">
+                <button
+                  onClick={() => setIsToolsOpen((o) => !o)}
+                  className="flex items-center gap-1.5 bg-accent-500 hover:bg-accent-400 text-primary-900 font-semibold px-4 py-1.5 rounded-lg transition-colors duration-200 focus:outline-none"
                 >
-                  {link.label}
-                </Link>
-              ))}
+                  Tools
+                  <svg
+                    className={`w-4 h-4 transition-transform duration-200 ${isToolsOpen ? 'rotate-180' : ''}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+
+                {isToolsOpen && (
+                  <div className="absolute top-full right-0 mt-3 w-52 bg-white rounded-xl shadow-lg border border-secondary-100 overflow-hidden z-50">
+                    {toolsItems.map((item) => (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setIsToolsOpen(false)}
+                        className="block px-4 py-3 text-sm text-secondary-700 hover:bg-primary-50 hover:text-primary-700 font-medium transition-colors duration-150"
+                      >
+                        {item.label}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
             </nav>
 
             {/* Auth button — desktop */}
@@ -172,16 +212,51 @@ export default function Header() {
       >
         <div className="flex flex-col h-full pt-20 px-6">
           <nav className="flex flex-col space-y-6">
-            {navLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                onClick={closeMenu}
-                className="text-white hover:text-accent-400 font-medium text-lg transition-colors duration-300 touch-target"
+            <Link href="/" onClick={closeMenu} className="text-white hover:text-accent-400 font-medium text-lg transition-colors duration-300 touch-target">
+              Home
+            </Link>
+            <Link href={getAnchorHref('#testimonials')} onClick={closeMenu} className="text-white hover:text-accent-400 font-medium text-lg transition-colors duration-300 touch-target">
+              Testimonials
+            </Link>
+
+            {/* Tools expandable */}
+            <div>
+              <button
+                onClick={() => setIsMobileToolsOpen((o) => !o)}
+                className="flex items-center gap-2 text-white hover:text-accent-400 font-medium text-lg transition-colors duration-300 w-full text-left touch-target focus:outline-none"
               >
-                {link.label}
-              </Link>
-            ))}
+                Tools
+                <svg
+                  className={`w-4 h-4 transition-transform duration-200 ${isMobileToolsOpen ? 'rotate-180' : ''}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {isMobileToolsOpen && (
+                <div className="mt-3 ml-4 flex flex-col space-y-3 border-l border-primary-500 pl-4">
+                  {toolsItems.map((item) => (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={closeMenu}
+                      className="text-primary-200 hover:text-accent-400 font-medium text-base transition-colors duration-300"
+                    >
+                      {item.label}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <Link href={getAnchorHref('#booking')} onClick={closeMenu} className="text-white hover:text-accent-400 font-medium text-lg transition-colors duration-300 touch-target">
+              Consultation
+            </Link>
+            <Link href="/contact" onClick={closeMenu} className="text-white hover:text-accent-400 font-medium text-lg transition-colors duration-300 touch-target">
+              Contact
+            </Link>
           </nav>
 
           {/* Auth — mobile */}
@@ -196,12 +271,13 @@ export default function Header() {
                 >
                   Account Settings
                 </Link>
-                <button
-                  disabled
-                  className="flex items-center text-primary-400 text-sm font-medium py-2 cursor-not-allowed w-full text-left"
+                <Link
+                  href="/account#preferences"
+                  onClick={closeMenu}
+                  className="flex items-center text-white hover:text-accent-400 text-sm font-medium py-2 transition-colors duration-300 touch-target"
                 >
-                  Preferences <span className="ml-2 text-xs bg-primary-600 px-1.5 py-0.5 rounded">soon</span>
-                </button>
+                  Preferences
+                </Link>
                 <button
                   onClick={() => { signOut(); closeMenu(); }}
                   className="mt-2 text-white border border-primary-400 hover:border-accent-400 hover:text-accent-400 text-sm font-medium px-4 py-2 rounded-lg transition-colors duration-300 w-full text-left"

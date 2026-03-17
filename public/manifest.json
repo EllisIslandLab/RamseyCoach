@@ -1,0 +1,23 @@
+{
+  "name": "Money-Willo",
+  "short_name": "Money-Willo",
+  "description": "Free financial calculators and budget planning tools.",
+  "start_url": "/tools?tab=budget",
+  "display": "standalone",
+  "background_color": "#16a34a",
+  "theme_color": "#16a34a",
+  "icons": [
+    {
+      "src": "/icons/192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

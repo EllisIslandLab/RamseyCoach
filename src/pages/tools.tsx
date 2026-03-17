@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
 import dynamic from 'next/dynamic';
 import Head from 'next/head';
 import Header from '@/components/Header';
@@ -8,6 +9,12 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 
 const TransactionPanel = dynamic(() => import('@/components/TransactionPanel'), { ssr: false });
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -63,10 +70,39 @@ const getSaved = (): Record<string, unknown> => {
 
 export default function ToolsPage() {
   const { user, openAuthModal } = useAuth();
+  const router = useRouter();
   const [calcSaveStatus, setCalcSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
-  const [activeTab, setActiveTab] = useState<'calculators' | 'budget' | 'transactions'>('calculators');
+  const [activeTab, setActiveTab] = useState<'calculators' | 'budget' | 'transactions'>('budget');
   const [openCalc, setOpenCalc] = useState<CalcId | null>('mortgage');
+
+  // Sync tab from URL query param
+  useEffect(() => {
+    const { tab } = router.query;
+    if (tab === 'budget' || tab === 'transactions' || tab === 'calculators') {
+      setActiveTab(tab);
+    }
+  }, [router.query]);
+
+  // ── PWA install prompt ───────────────────────────────────────────────────────
+  const [installPrompt, setInstallPrompt] = useState<Event | null>(null);
+  const [showIosHint, setShowIosHint] = useState(false);
+
+  useEffect(() => {
+    const handler = (e: Event) => { e.preventDefault(); setInstallPrompt(e); };
+    window.addEventListener('beforeinstallprompt', handler);
+    // Show iOS hint if on Safari/iOS and not in standalone mode
+    const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const isStandalone = ('standalone' in navigator) && (navigator as Navigator & { standalone: boolean }).standalone;
+    if (isIos && !isStandalone) setShowIosHint(true);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstall = async () => {
+    if (!installPrompt) return;
+    (installPrompt as BeforeInstallPromptEvent).prompt();
+    setInstallPrompt(null);
+  };
 
   const toggleCalc = (id: CalcId) =>
     setOpenCalc((prev) => (prev === id ? null : id));
@@ -815,46 +851,26 @@ export default function ToolsPage() {
                 Free calculators and planning tools to help you take control of your money.
                 Sign in to save your data permanently — or use them without an account.
               </p>
+
+              {/* PWA install prompt */}
+              {installPrompt && (
+                <button
+                  onClick={handleInstall}
+                  className="mt-5 inline-flex items-center gap-2 bg-white text-primary-700 font-semibold text-sm px-5 py-2.5 rounded-full shadow hover:bg-primary-50 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Add to Home Screen
+                </button>
+              )}
+              {showIosHint && !installPrompt && (
+                <p className="mt-4 text-primary-200 text-sm">
+                  To install: tap the <strong>Share</strong> button in Safari and select <strong>Add to Home Screen</strong>.
+                </p>
+              )}
             </div>
           </section>
-
-          {/* Tab Nav */}
-          <div data-noprint className="bg-white border-b border-secondary-200 sticky top-[64px] md:top-[80px] z-20">
-            <div className="container-custom">
-              <div className="flex">
-                <button
-                  onClick={() => setActiveTab('calculators')}
-                  className={`px-6 py-4 text-sm font-semibold border-b-2 transition-colors duration-200 focus:outline-none ${
-                    activeTab === 'calculators'
-                      ? 'border-primary-600 text-primary-700'
-                      : 'border-transparent text-secondary-500 hover:text-secondary-700'
-                  }`}
-                >
-                  Financial Calculators
-                </button>
-                <button
-                  onClick={() => setActiveTab('budget')}
-                  className={`px-6 py-4 text-sm font-semibold border-b-2 transition-colors duration-200 focus:outline-none ${
-                    activeTab === 'budget'
-                      ? 'border-primary-600 text-primary-700'
-                      : 'border-transparent text-secondary-500 hover:text-secondary-700'
-                  }`}
-                >
-                  Budget Planner
-                </button>
-                <button
-                  onClick={() => setActiveTab('transactions')}
-                  className={`px-6 py-4 text-sm font-semibold border-b-2 transition-colors duration-200 focus:outline-none ${
-                    activeTab === 'transactions'
-                      ? 'border-primary-600 text-primary-700'
-                      : 'border-transparent text-secondary-500 hover:text-secondary-700'
-                  }`}
-                >
-                  Transactions
-                </button>
-              </div>
-            </div>
-          </div>
 
           {/* ── Calculators Tab ─────────────────────────────────────────────── */}
           {activeTab === 'calculators' && (
