@@ -7,6 +7,7 @@ import Footer from '@/components/Footer';
 import BudgetPlanner from '@/components/BudgetPlanner';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { useIsStandalone } from '@/hooks/useIsStandalone';
 
 const TransactionPanel = dynamic(() => import('@/components/TransactionPanel'), { ssr: false });
 
@@ -71,6 +72,7 @@ const getSaved = (): Record<string, unknown> => {
 export default function ToolsPage() {
   const { user, openAuthModal } = useAuth();
   const router = useRouter();
+  const isStandalone = useIsStandalone();
   const [calcSaveStatus, setCalcSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
   const [activeTab, setActiveTab] = useState<'calculators' | 'budget' | 'transactions'>('budget');
@@ -843,8 +845,8 @@ export default function ToolsPage() {
         <Header />
 
         <main className="flex-1 bg-secondary-50">
-          {/* Page Hero */}
-          <section data-noprint className="bg-primary-700 text-white py-10 px-4">
+          {/* Page Hero — hidden in standalone/PWA mode (app header provides context) */}
+          {!isStandalone && <section data-noprint className="bg-primary-700 text-white py-10 px-4">
             <div className="container-custom text-center">
               <h1 className="text-3xl md:text-4xl font-bold mb-3 text-white">Financial Tools</h1>
               <p className="text-primary-100 text-base md:text-lg max-w-2xl mx-auto leading-relaxed">
@@ -870,7 +872,7 @@ export default function ToolsPage() {
                 </p>
               )}
             </div>
-          </section>
+          </section>}
 
           {/* ── Calculators Tab ─────────────────────────────────────────────── */}
           {activeTab === 'calculators' && (

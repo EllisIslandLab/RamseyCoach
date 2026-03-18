@@ -4,13 +4,15 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
+import { useRouter } from 'next/router';
 import { useAuth } from '@/context/AuthContext';
 import UserMenu from '@/components/UserMenu';
+import { useIsStandalone } from '@/hooks/useIsStandalone';
 
 const toolsItems = [
-  { href: '/tools?tab=calculators', label: 'Financial Calculators' },
-  { href: '/tools?tab=budget', label: 'Budget Planner' },
-  { href: '/tools?tab=transactions', label: 'Transactions' },
+  { href: '/tools?tab=calculators', label: 'Financial Calculators', shortLabel: 'Calculators', tab: 'calculators' },
+  { href: '/tools?tab=budget', label: 'Budget Planner', shortLabel: 'Budget', tab: 'budget' },
+  { href: '/tools?tab=transactions', label: 'Transactions', shortLabel: 'Transactions', tab: 'transactions' },
 ];
 
 export default function Header() {
@@ -20,7 +22,10 @@ export default function Header() {
   const [isMobileToolsOpen, setIsMobileToolsOpen] = useState(false);
   const toolsRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
+  const router = useRouter();
   const { user, openAuthModal, signOut } = useAuth();
+  const isStandalone = useIsStandalone();
+  const activeAppTab = (router.query.tab as string) || 'budget';
 
   // Handle scroll effect for header shadow
   useEffect(() => {
@@ -70,6 +75,60 @@ export default function Header() {
     // If on home page, use just the anchor; otherwise prepend with /
     return pathname === '/' ? anchor : `/${anchor}`;
   };
+
+  // ── App (standalone/PWA) header ─────────────────────────────────────────────
+  if (isStandalone) {
+    return (
+      <header
+        className={`sticky top-0 z-30 bg-primary-600 transition-shadow duration-300 ${
+          isScrolled ? 'shadow-lg' : ''
+        }`}
+      >
+        {/* App top bar */}
+        <div className="flex items-center justify-between h-12 px-4">
+          <Link href="/tools?tab=budget" className="flex items-center space-x-2">
+            <Image
+              src="/favicon.png"
+              alt="Money-Willo Budget"
+              width={32}
+              height={32}
+              className="w-8 h-8 rounded-full"
+            />
+            <span className="text-white font-bold text-sm">Money-Willo Budget</span>
+          </Link>
+          <div>
+            {user ? (
+              <UserMenu />
+            ) : (
+              <button
+                onClick={openAuthModal}
+                className="text-white border border-primary-400 hover:border-accent-400 hover:text-accent-400 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors duration-300"
+              >
+                Sign In
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Tool tab bar */}
+        <div className="flex border-t border-primary-500">
+          {toolsItems.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`flex-1 text-center py-2 text-xs font-semibold transition-colors duration-200 ${
+                activeAppTab === item.tab
+                  ? 'text-accent-400 border-b-2 border-accent-400'
+                  : 'text-primary-200 hover:text-white'
+              }`}
+            >
+              {item.shortLabel}
+            </Link>
+          ))}
+        </div>
+      </header>
+    );
+  }
 
   return (
     <>

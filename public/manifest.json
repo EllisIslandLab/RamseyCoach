@@ -1,6 +1,6 @@
 {
-  "name": "Money-Willo",
-  "short_name": "Money-Willo",
+  "name": "Money-Willo Budget",
+  "short_name": "Budget",
   "description": "Free financial calculators and budget planning tools.",
   "start_url": "/tools?tab=budget",
   "display": "standalone",
