@@ -7,6 +7,7 @@ import { buildBudgetWorkbook } from '@/lib/buildBudgetWorkbook';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { getUserTransactions, getGlobalCategories } from '@/lib/dataService';
+import { useIsStandalone } from '@/hooks/useIsStandalone';
 
 /* ─── Types ────────────────────────────────────────────────────────────────── */
 interface NVRow   { id: string; name: string; value: string; }
@@ -548,9 +549,9 @@ function ComparisonSection({ title, rows, actuals, onActualChange }: ComparisonS
           {/* Column header */}
           <div className="flex items-center px-5 py-2 gap-3 bg-secondary-50 border-b border-secondary-100">
             <span className="flex-1 text-xs font-bold uppercase tracking-wider text-secondary-400">Category</span>
-            <span className="w-20 text-right text-xs font-bold uppercase tracking-wider text-secondary-400 flex-shrink-0">Budget</span>
-            <span className="w-20 text-right text-xs font-bold uppercase tracking-wider text-secondary-400 flex-shrink-0">Actual</span>
-            <span className="w-20 text-right text-xs font-bold uppercase tracking-wider text-secondary-400 flex-shrink-0">Diff</span>
+            <span className="w-14 sm:w-20 text-right text-xs font-bold uppercase tracking-wider text-secondary-400 flex-shrink-0">Budget</span>
+            <span className="w-14 sm:w-20 text-right text-xs font-bold uppercase tracking-wider text-secondary-400 flex-shrink-0">Actual</span>
+            <span className="hidden sm:block w-20 text-right text-xs font-bold uppercase tracking-wider text-secondary-400 flex-shrink-0">Diff</span>
           </div>
 
           {rows.map(row => {
@@ -560,18 +561,18 @@ function ComparisonSection({ title, rows, actuals, onActualChange }: ComparisonS
             return (
               <div key={row.id} className="flex items-center px-5 py-2 gap-3 border-b border-secondary-50 hover:bg-secondary-50">
                 <span className="flex-1 text-sm text-secondary-700 truncate">{row.name || '—'}</span>
-                <span className="w-20 text-right text-sm text-secondary-500 flex-shrink-0">{fmt(row.budget)}</span>
-                <div className="w-20 flex-shrink-0 flex justify-end">
+                <span className="w-14 sm:w-20 text-right text-sm text-secondary-500 flex-shrink-0">{fmt(row.budget)}</span>
+                <div className="w-14 sm:w-20 flex-shrink-0 flex justify-end">
                   <input
                     type="number"
                     min="0"
-                    className="border border-secondary-200 rounded px-2 py-1 text-xs text-right w-20 focus:outline-none focus:ring-1 focus:ring-primary-400"
+                    className="border border-secondary-200 rounded px-2 py-1 text-xs text-right w-14 sm:w-20 focus:outline-none focus:ring-1 focus:ring-primary-400"
                     value={actuals[row.id] ?? ''}
                     onChange={e => onActualChange(row.id, e.target.value)}
                     placeholder="0"
                   />
                 </div>
-                <span className={`w-20 text-right text-sm font-semibold flex-shrink-0 ${
+                <span className={`hidden sm:block w-20 text-right text-sm font-semibold flex-shrink-0 ${
                   hasVal
                     ? diff > 0 ? 'text-red-500' : diff < 0 ? 'text-primary-600' : 'text-secondary-400'
                     : 'text-secondary-300'
@@ -718,6 +719,7 @@ function MonthComparisonView({
   onAddFixedSub, onAddVarSub,
   onSave, onImport, onUndo, undoStack,
 }: MonthComparisonViewProps) {
+  const isStandalone = useIsStandalone();
   const now = new Date();
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth());
@@ -756,7 +758,7 @@ function MonthComparisonView({
   return (
     <div className="container-custom py-8 max-w-3xl mx-auto">
       {/* Header bar — sticky below site header + tab nav */}
-      <div data-noprint className="sticky top-[64px] md:top-[80px] z-10 bg-secondary-50 border-b border-secondary-200 py-2 mb-6 flex items-center justify-between gap-2 flex-wrap">
+      <div data-noprint className={`sticky ${isStandalone ? 'top-[80px]' : 'top-[64px] md:top-[80px]'} z-10 bg-secondary-50 border-b border-secondary-200 py-2 mb-6 flex items-center justify-between gap-2 flex-wrap`}>
         <button
           onClick={onBack}
           className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-secondary-100 hover:bg-secondary-200 text-secondary-700 transition-colors"
@@ -901,6 +903,7 @@ type BudgetUndoSnapshot = {
 export default function BudgetPlanner() {
   const { user, openAuthModal } = useAuth();
   const { wholeDollars } = usePreferences();
+  const isStandalone = useIsStandalone();
   _wholeDollars = wholeDollars; // sync formatter before any child renders
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
@@ -1439,7 +1442,7 @@ export default function BudgetPlanner() {
       </div>
 
       {/* Action Bar — sticky below site header + tab nav */}
-      <div data-noprint className="sticky top-[64px] md:top-[80px] z-10 bg-secondary-50 border-b border-secondary-200 py-2 mb-6 flex justify-end items-center gap-2 flex-wrap">
+      <div data-noprint className={`sticky ${isStandalone ? 'top-[80px]' : 'top-[64px] md:top-[80px]'} z-10 bg-secondary-50 border-b border-secondary-200 py-2 mb-6 flex justify-end items-center gap-2 flex-wrap`}>
 
           {/* Compare Monthly */}
           <button
