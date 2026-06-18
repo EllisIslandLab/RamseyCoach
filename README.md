@@ -11,6 +11,10 @@ A professional Next.js website for a Ramsey Preferred Coach personal finance coa
 - ✅ Interactive booking calendar with timezone detection
 - ✅ Real-time availability checking
 - ✅ Airtable integration for consultations and testimonials
+- ✅ Interactive budget planner with category management
+- ✅ Bank statement importer (Excel/spreadsheet upload)
+- ✅ User accounts with secure sign-in
+- ✅ Partner & shared-access budgeting
 - ✅ Nature-inspired color palette (green, brown, gold)
 - ✅ Smooth animations and transitions
 - ✅ SEO-friendly page structure
