@@ -1,4 +1,4 @@
-# Ramsey Preferred Coach Website
+# Welcome to RamseyCoach
 
 A professional Next.js website for a Ramsey Preferred Coach personal finance coaching business, built using the Web Launch Academy methodology. Features mobile-first responsive design, Airtable integration for bookings and testimonials, and a clean nature-inspired design theme.
 
