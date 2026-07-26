@@ -14,6 +14,7 @@ export default function Document() {
       <body>
         <Main />
         <NextScript />
+        <script defer src="https://weblaunchacademy.com/beacon.js" data-site="f6d02c2f-dd2e-43c3-bfae-9682f745ae0a"></script>
       </body>
     </Html>
   );
