@@ -406,10 +406,11 @@ function AmtRowList({
   );
 }
 
-function NVRowList({ rows, setRows, addLabel }: {
+function NVRowList({ rows, setRows, addLabel, onPushUndo }: {
   rows: NVRow[];
   setRows: (r: NVRow[]) => void;
   addLabel: string;
+  onPushUndo?: () => void;
 }) {
   return (
     <div className="space-y-2">
@@ -429,12 +430,12 @@ function NVRowList({ rows, setRows, addLabel }: {
             onChange={e => setRows(setNVField(rows, i, 'value', e.target.value))}
             placeholder="0"
           />
-          <button onClick={() => setRows(rows.filter((_, j) => j !== i))} className={rmBtn} title="Remove">
+          <button onClick={() => { onPushUndo?.(); setRows(rows.filter((_, j) => j !== i)); }} className={rmBtn} title="Remove">
             ×
           </button>
         </div>
       ))}
-      <button onClick={() => setRows([...rows, { id: uid(), name: '', value: '' }])} className={addBtn}>
+      <button onClick={() => { onPushUndo?.(); setRows([...rows, { id: uid(), name: '', value: '' }]); }} className={addBtn}>
         <span className="font-bold text-base">+</span> {addLabel}
       </button>
     </div>
@@ -970,21 +971,22 @@ export default function BudgetPlanner() {
     }]);
   }, [fixedSubs, varSubs, sinks, sinksLabel, savings, incRows, assets, debts]);
 
+  // Fix: call all state setters directly — never call state setters inside
+  // another state setter's updater callback (React treats updaters as pure
+  // functions and may call them multiple times in Strict Mode).
   const handleUndo = (toIndex?: number) => {
-    setUndoStack(prev => {
-      const idx = toIndex ?? prev.length - 1;
-      if (idx < 0 || idx >= prev.length) return prev;
-      const snap = prev[idx];
-      setFixedSubs(snap.fixedSubs);
-      setVarSubs(snap.varSubs);
-      setSinks(snap.sinks);
-      setSinksLabel(snap.sinksLabel);
-      setSavings(snap.savings);
-      setIncRows(snap.incRows);
-      setAssets(snap.assets);
-      setDebts(snap.debts);
-      return prev.slice(0, idx);
-    });
+    const idx = toIndex ?? undoStack.length - 1;
+    if (idx < 0 || idx >= undoStack.length) return;
+    const snap = undoStack[idx];
+    setFixedSubs(snap.fixedSubs);
+    setVarSubs(snap.varSubs);
+    setSinks(snap.sinks);
+    setSinksLabel(snap.sinksLabel);
+    setSavings(snap.savings);
+    setIncRows(snap.incRows);
+    setAssets(snap.assets);
+    setDebts(snap.debts);
+    setUndoStack(undoStack.slice(0, idx));
   };
 
   /* ── Row selection + bulk actions ────────────────────────────────────── */
@@ -1555,12 +1557,12 @@ export default function BudgetPlanner() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <p className={subHdr}>Assets — What You Own</p>
-            <NVRowList rows={assets} setRows={setAssets} addLabel="Add Asset" />
+            <NVRowList rows={assets} setRows={setAssets} addLabel="Add Asset" onPushUndo={pushUndo} />
             <SubTotal label="Total Assets" amount={totalAssets} />
           </div>
           <div>
             <p className={subHdr}>Debts — What You Owe</p>
-            <NVRowList rows={debts} setRows={setDebts} addLabel="Add Debt" />
+            <NVRowList rows={debts} setRows={setDebts} addLabel="Add Debt" onPushUndo={pushUndo} />
             <SubTotal label="Total Debt" amount={totalDebtA} />
           </div>
         </div>
