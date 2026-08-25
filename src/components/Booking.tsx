@@ -115,7 +115,7 @@ export default function Booking() {
             {/* CTA Button */}
             <button
               onClick={openBookingModal}
-              className="btn-accent text-lg px-8 py-4 shadow-xl hover:shadow-2xl transform hover:scale-105 transition-all duration-300"
+              className="btn bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500 text-lg px-8 py-4 shadow-xl hover:shadow-2xl transform hover:scale-105 transition-all duration-300"
             >
               Book Your Free Consultation
             </button>

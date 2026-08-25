@@ -171,7 +171,7 @@ export default function StoryModal({ isOpen, onClose, onBookConsultation }: Stor
 
         {/* Modal Footer */}
         <div className="mt-8 flex justify-end">
-          <button onClick={onBookConsultation} className="btn-accent">
+          <button onClick={onBookConsultation} className="btn bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500">
             Book Free Consultation
           </button>
         </div>
