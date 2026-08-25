@@ -59,9 +59,9 @@ export default function Hero() {
                 <button
                   ref={bookingButtonRef}
                   onClick={openBookingModal}
-                  className={`btn-accent transition-all duration-300 ${
+                  className={`btn bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500 transition-all duration-300 ${
                     highlightBooking
-                      ? 'ring-4 ring-offset-2 ring-accent-400 scale-110 shadow-2xl animate-pulse'
+                      ? 'ring-4 ring-offset-2 ring-blue-400 scale-110 shadow-2xl animate-pulse'
                       : ''
                   }`}
                 >
